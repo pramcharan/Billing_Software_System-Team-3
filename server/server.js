@@ -5,6 +5,7 @@ import connectDB from "./config/db.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import supplierRoutes from "./routes/supplierRoutes.js";
 import purchaseRoutes from "./routes/purchaseRoutes.js";
+import customerHistoryRoutes from "./routes/customerHistoryRoutes.js"; 
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use("/api/customers", customerRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
+app.use("/api/customers", customerHistoryRoutes);  
 
 app.get("/api/health", (req, res) => {
     res.status(200).json({

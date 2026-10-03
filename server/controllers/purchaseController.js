@@ -1,121 +1,72 @@
 import mongoose from "mongoose";
 import Purchase from "../models/Purchase.js";
 import Supplier from "../models/Supplier.js";
+import Customer from "../models/Customer.js";
+import { findMissingProducts, increaseStock } from "../services/inventoryService.js";
+
+const parseDate = (value, endOfDay = false) => {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) d.setUTCHours(23, 59, 59, 999);
+    return d;
+};
 
 export const createPurchase = async (req, res) => {
     try {
-        const {
-            purchaseId,
-            supplierId,
+        // Body is already validated by validatePurchase middleware
+        const { supplierId,
+            customerId,
             purchaseDate,
             items,
             subtotal,
             discount,
-            tax,
-            totalAmount,
-            paymentStatus
-        } = req.body;
+            tax, 
+            totalAmount } 
+                  = req.body;
+        const purchaseId = req.body.purchaseId.trim();
+        const paymentStatus = req.body.paymentStatus.trim().toLowerCase();
 
-        if (!purchaseId || !purchaseId.trim()) {
-            return res.status(400).json({
-                success: false,
-                message: "Purchase ID is required"
-            });
+        if (await Purchase.exists({ purchaseId })) {
+            return res.status(400).json({ success: false, message: "Purchase ID already exists" });
         }
 
-        if (!supplierId) {
-            return res.status(400).json({
-                success: false,
-                message: "Supplier ID is required"
-            });
+        if (!(await Supplier.exists({ _id: supplierId }))) {
+            return res.status(404).json({ success: false, message: "Supplier not found" });
         }
 
-        if (!mongoose.isValidObjectId(supplierId)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid supplier ID"
-            });
+        if (customerId && !(await Customer.exists({ _id: customerId }))) {
+            return res.status(404).json({ success: false, message: "Customer not found" });
         }
 
-        if (!purchaseDate) {
-            return res.status(400).json({
-                success: false,
-                message: "Purchase date is required"
-            });
-        }
-
-        if (!items || !Array.isArray(items) || items.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Purchase must contain at least one product"
-            });
-        }
-
-        const supplier = await Supplier.findById(supplierId);
-
-        if (!supplier) {
+        const missing = await findMissingProducts(items.map((i) => i.productId));
+        if (missing.length > 0) {
             return res.status(404).json({
                 success: false,
-                message: "Supplier not found"
+                message: "Product not found",
+                missingProducts: missing
             });
-        }
-
-        for (const item of items) {
-            if (!item.productId) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Product ID is required for every purchase item"
-                });
-            }
-
-            if (!mongoose.isValidObjectId(item.productId)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid product ID"
-                });
-            }
-
-            if (
-                item.quantity === undefined ||
-                item.quantity === null ||
-                item.quantity <= 0
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Quantity must be greater than zero"
-                });
-            }
-
-            if (
-                item.purchasePrice === undefined ||
-                item.purchasePrice === null ||
-                item.purchasePrice < 0
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Purchase price cannot be negative"
-                });
-            }
-
-            if (item.tax !== undefined && item.tax < 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Tax cannot be negative"
-                });
-            }
         }
 
         const purchase = await Purchase.create({
-            purchaseId,
-            supplierId,
-            purchaseDate,
-            items,
-            subtotal,
-            discount,
-            tax,
-            totalAmount,
-            paymentStatus
+            purchaseId, supplierId, customerId, purchaseDate, items,
+            subtotal, discount, tax, totalAmount, paymentStatus
         });
+
+        // Purchase -> Inventory integration
+        try {
+            const updated = await increaseStock(purchase.items);
+            if (updated) {
+                purchase.stockUpdated = true;
+                await purchase.save();
+            }
+        } catch (stockError) {
+            console.error("Stock update failed, rolling back purchase:", stockError);
+            await Purchase.findByIdAndDelete(purchase._id);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to update inventory. Purchase was not saved."
+            });
+        }
 
         return res.status(201).json({
             success: true,
@@ -123,78 +74,55 @@ export const createPurchase = async (req, res) => {
             data: purchase
         });
     } catch (error) {
+        if (error?.code === 11000) {
+            return res.status(400).json({ success: false, message: "Purchase ID already exists" });
+        }
+        if (error?.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: error.message });
+        }
         console.error("Create purchase error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Failed to create purchase"
-        });
+        return res.status(500).json({ success: false, message: "Failed to create purchase" });
     }
 };
 
 export const getPurchases = async (req, res) => {
     try {
         const { from, to, supplier } = req.query;
-
         const filter = {};
 
         if (supplier) {
             if (!mongoose.isValidObjectId(supplier)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid supplier ID"
-                });
+                return res.status(400).json({ success: false, message: "Invalid supplier ID" });
             }
-
             filter.supplierId = supplier;
         }
 
-        if (from || to) {
+        let fromDate, toDate;
+        if (from) {
+            fromDate = parseDate(from);
+            if (!fromDate) return res.status(400).json({ success: false, message: "Invalid from date" });
+        }
+        if (to) {
+            toDate = parseDate(to, true);
+            if (!toDate) return res.status(400).json({ success: false, message: "Invalid to date" });
+        }
+        if (fromDate && toDate && fromDate > toDate) {
+            return res.status(400).json({ success: false, message: "from date cannot be after to date" });
+        }
+        if (fromDate || toDate) {
             filter.purchaseDate = {};
-
-            if (from) {
-                const fromDate = new Date(from);
-
-                if (Number.isNaN(fromDate.getTime())) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Invalid from date"
-                    });
-                }
-
-                filter.purchaseDate.$gte = fromDate;
-            }
-
-            if (to) {
-                const toDate = new Date(to);
-
-                if (Number.isNaN(toDate.getTime())) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Invalid to date"
-                    });
-                }
-
-                filter.purchaseDate.$lte = toDate;
-            }
+            if (fromDate) filter.purchaseDate.$gte = fromDate;
+            if (toDate) filter.purchaseDate.$lte = toDate;
         }
 
         const purchases = await Purchase.find(filter)
             .populate("supplierId", "companyName contactPerson")
             .sort({ purchaseDate: -1 });
 
-        return res.status(200).json({
-            success: true,
-            count: purchases.length,
-            data: purchases
-        });
+        return res.status(200).json({ success: true, count: purchases.length, data: purchases });
     } catch (error) {
         console.error("Get purchases error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Failed to fetch purchases"
-        });
+        return res.status(500).json({ success: false, message: "Failed to fetch purchases" });
     }
 };
 
@@ -203,32 +131,19 @@ export const getPurchaseById = async (req, res) => {
         const { id } = req.params;
 
         if (!mongoose.isValidObjectId(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid purchase ID"
-            });
+            return res.status(400).json({ success: false, message: "Invalid purchase ID" });
         }
 
         const purchase = await Purchase.findById(id)
             .populate("supplierId", "companyName contactPerson");
 
         if (!purchase) {
-            return res.status(404).json({
-                success: false,
-                message: "Purchase not found"
-            });
+            return res.status(404).json({ success: false, message: "Purchase not found" });
         }
 
-        return res.status(200).json({
-            success: true,
-            data: purchase
-        });
+        return res.status(200).json({ success: true, data: purchase });
     } catch (error) {
         console.error("Get purchase by ID error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Failed to fetch purchase"
-        });
+        return res.status(500).json({ success: false, message: "Failed to fetch purchase" });
     }
 };

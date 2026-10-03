@@ -81,10 +81,20 @@ const purchaseSchema = new mongoose.Schema(
             min: 0
         },
 
-        paymentStatus: {
+             paymentStatus: {
             type: String,
             required: true,
             trim: true
+        },
+
+        customerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Customer"
+        },
+
+        stockUpdated: {
+            type: Boolean,
+            default: false
         }
     },
     {

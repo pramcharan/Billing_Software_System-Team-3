@@ -5,14 +5,7 @@ import SupplierDetails from './SupplierDetails';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
 const Suppliers = () => {
-  const [suppliers, setSuppliers] = useState(() => {
-    try {
-      const saved = localStorage.getItem('suppliers');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [suppliers, setSuppliers] = useState([]);
 
   const [searchQuery, setSearchQuery]   = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -28,10 +21,6 @@ const Suppliers = () => {
   const [isDeleteOpen, setIsDeleteOpen]         = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
 
-  // Persist changes to localStorage whenever supplier list changes
-  useEffect(() => {
-    localStorage.setItem('suppliers', JSON.stringify(suppliers));
-  }, [suppliers]);
 
   const loadSuppliers = async () => {
     const data = await supplierService.getSuppliers();

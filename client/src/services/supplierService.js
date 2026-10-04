@@ -1,53 +1,16 @@
 // API-Ready Supplier Service for Team 3 - Supplier Management
-// Uses localStorage ('suppliers' key) as requested.
-// Storage logic is decoupled so it can later be replaced by backend API endpoints (/api/suppliers).
+// Currently uses in-memory React state only. NO localStorage.
+// Replace mock implementations with axios/fetch calls when backend APIs (/api/suppliers) are available.
 
-const STORAGE_KEY = 'suppliers';
-const COUNTER_KEY = 'suppliers_counter';
-
-const getStoredSuppliers = () => {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved !== null) return JSON.parse(saved);
-  } catch (e) {
-    console.error("Error reading suppliers from localStorage:", e);
-  }
-  return [];
-};
-
-const saveStoredSuppliers = (suppliers) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
-  } catch (e) {
-    console.error("Error saving suppliers to localStorage:", e);
-  }
-};
-
-const getStoredCounter = () => {
-  try {
-    const saved = localStorage.getItem(COUNTER_KEY);
-    if (saved !== null) return parseInt(saved, 10) || 0;
-  } catch (e) {
-    console.error("Error reading supplier counter:", e);
-  }
-  return 0;
-};
-
-const saveStoredCounter = (counter) => {
-  try {
-    localStorage.setItem(COUNTER_KEY, counter.toString());
-  } catch (e) {
-    console.error("Error saving supplier counter:", e);
-  }
-};
+// In-memory store (session only — resets on page refresh, as required)
+let _suppliers = [];
+let _counter = 0;
 
 /**
  * Generates unique Supplier IDs in format SUP-001, SUP-002, SUP-003.
- * Uses a separate counter in localStorage to ensure deleted IDs are never reused.
+ * Uses an in-memory counter so deleted IDs are never reused within the session.
  */
 export const generateSupplierId = (suppliers = []) => {
-  let counter = getStoredCounter();
-
   // Safeguard: find maximum numeric suffix among all existing supplier IDs
   const maxExisting = suppliers.reduce((max, s) => {
     const sIdStr = s.supplierId || s.id || '';
@@ -59,33 +22,32 @@ export const generateSupplierId = (suppliers = []) => {
     return max;
   }, 0);
 
-  let nextNum = Math.max(counter, maxExisting) + 1;
+  let nextNum = Math.max(_counter, maxExisting) + 1;
 
   // Ensure nextNum does not collide with any existing supplier ID
   while (
     suppliers.some(
       s =>
-        s.id === `SUP-${String(nextNum).padStart(3, "0")}` ||
-        s.supplierId === `SUP-${String(nextNum).padStart(3, "0")}`
+        s.id === `SUP-${String(nextNum).padStart(3, '0')}` ||
+        s.supplierId === `SUP-${String(nextNum).padStart(3, '0')}`
     )
   ) {
     nextNum++;
   }
 
-  saveStoredCounter(nextNum);
-  return `SUP-${String(nextNum).padStart(3, "0")}`;
+  _counter = nextNum;
+  return `SUP-${String(nextNum).padStart(3, '0')}`;
 };
 
 export const supplierService = {
   // GET /api/suppliers
   getSuppliers: async () => {
-    return getStoredSuppliers();
+    return [..._suppliers];
   },
 
   // POST /api/suppliers
   createSupplier: async (supplierData) => {
-    const suppliers = getStoredSuppliers();
-    const newId = generateSupplierId(suppliers);
+    const newId = generateSupplierId(_suppliers);
     const newSupplier = {
       id: newId,
       supplierId: newId,
@@ -98,15 +60,13 @@ export const supplierService = {
       status: supplierData.status || 'Active',
       createdAt: new Date().toISOString().split('T')[0]
     };
-    const updated = [...suppliers, newSupplier];
-    saveStoredSuppliers(updated);
+    _suppliers = [..._suppliers, newSupplier];
     return newSupplier;
   },
 
   // PUT /api/suppliers/:id
   updateSupplier: async (id, updatedData) => {
-    const suppliers = getStoredSuppliers();
-    const updated = suppliers.map(s => {
+    _suppliers = _suppliers.map(s => {
       if (s.id === id || s.supplierId === id) {
         return {
           ...s,
@@ -121,29 +81,24 @@ export const supplierService = {
       }
       return s;
     });
-    saveStoredSuppliers(updated);
-    return updated.find(s => s.id === id || s.supplierId === id);
+    return _suppliers.find(s => s.id === id || s.supplierId === id);
   },
 
   // DELETE /api/suppliers/:id
   deleteSupplier: async (id) => {
-    const suppliers = getStoredSuppliers();
-    const updated = suppliers.filter(s => s.id !== id && s.supplierId !== id);
-    saveStoredSuppliers(updated);
+    _suppliers = _suppliers.filter(s => s.id !== id && s.supplierId !== id);
     return { success: true, id };
   },
 
   // PATCH /api/suppliers/:id/toggle-status
   toggleSupplierStatus: async (id) => {
-    const suppliers = getStoredSuppliers();
-    const updated = suppliers.map(s => {
+    _suppliers = _suppliers.map(s => {
       if (s.id === id || s.supplierId === id) {
         return { ...s, status: s.status === 'Active' ? 'Inactive' : 'Active' };
       }
       return s;
     });
-    saveStoredSuppliers(updated);
-    return updated.find(s => s.id === id || s.supplierId === id);
+    return _suppliers.find(s => s.id === id || s.supplierId === id);
   }
 };
 

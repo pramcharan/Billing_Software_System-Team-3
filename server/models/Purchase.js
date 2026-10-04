@@ -10,7 +10,7 @@ const purchaseItemSchema = new mongoose.Schema(
         quantity: {
             type: Number,
             required: true,
-            min: 0
+            min: 1
         },
 
         purchasePrice: {
@@ -81,7 +81,7 @@ const purchaseSchema = new mongoose.Schema(
             min: 0
         },
 
-             paymentStatus: {
+        paymentStatus: {
             type: String,
             required: true,
             trim: true

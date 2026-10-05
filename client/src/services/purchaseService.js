@@ -1,82 +1,192 @@
-// API-Ready Purchase Service for Team 3 - Purchase Management
-// Currently uses in-memory React state only. NO localStorage.
-// Replace mock implementations with axios/fetch calls when backend APIs (/api/purchases) are available.
+import { apiRequest } from './api';
 
-// In-memory store (session only — resets on page refresh, as required)
-let _purchases = [];
-let _counter = 0;
+const formatStatus = (status = '') =>
+  status
+    ? status.charAt(0).toUpperCase() +
+      status.slice(1).toLowerCase()
+    : '';
 
-/**
- * Generates unique Purchase IDs in format PUR-001, PUR-002, etc.
- * Uses an in-memory counter so deleted IDs are never reused within the session.
- */
-export const generatePurchaseId = (purchases = []) => {
-  const maxExisting = purchases.reduce((max, p) => {
-    const idStr = p.purchaseId || p.id || '';
-    const match = idStr.match(/PUR-(\d+)/i);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      return Math.max(max, num);
-    }
-    return max;
-  }, 0);
+const normalizePurchase = (purchase) => {
+  const populatedSupplier =
+    purchase.supplierId &&
+    typeof purchase.supplierId === 'object'
+      ? purchase.supplierId
+      : null;
 
-  let nextNum = Math.max(_counter, maxExisting) + 1;
+  return {
+    ...purchase,
+    id: purchase._id,
+    purchaseId: purchase.purchaseId,
 
-  while (
-    purchases.some(
-      p =>
-        p.id === `PUR-${String(nextNum).padStart(3, '0')}` ||
-        p.purchaseId === `PUR-${String(nextNum).padStart(3, '0')}`
-    )
-  ) {
-    nextNum++;
-  }
+    supplierId:
+      populatedSupplier?._id ||
+      purchase.supplierId ||
+      '',
 
-  _counter = nextNum;
-  return `PUR-${String(nextNum).padStart(3, '0')}`;
+    supplierName:
+      populatedSupplier?.companyName ||
+      purchase.supplierName ||
+      '',
+
+    purchaseDate: purchase.purchaseDate
+      ? purchase.purchaseDate.split('T')[0]
+      : '',
+
+    paymentStatus: formatStatus(
+      purchase.paymentStatus
+    ),
+
+    grandTotal:
+      purchase.totalAmount ?? 0,
+
+    taxAmount:
+      purchase.tax ?? 0,
+
+    discountAmount:
+      purchase.discount ?? 0,
+
+    items: (purchase.items || []).map(
+      (item) => ({
+        ...item,
+
+        productId:
+          typeof item.productId === 'object'
+            ? item.productId._id
+            : item.productId,
+      })
+    ),
+  };
+};
+
+export const generatePurchaseId = (
+  purchases = []
+) => {
+  const maxNumber = purchases.reduce(
+    (max, purchase) => {
+      const match = String(
+        purchase.purchaseId || ''
+      ).match(/PUR-(\d+)/i);
+
+      const number = match
+        ? Number(match[1])
+        : 0;
+
+      return Math.max(max, number);
+    },
+    0
+  );
+
+  return `PUR-${String(
+    maxNumber + 1
+  ).padStart(3, '0')}`;
 };
 
 export const purchaseService = {
-  // GET /api/purchases
-  getPurchases: async () => {
-    return [..._purchases];
+  getPurchases: async (filters = {}) => {
+    const params = new URLSearchParams();
+
+    if (filters.from) {
+      params.append('from', filters.from);
+    }
+
+    if (filters.to) {
+      params.append('to', filters.to);
+    }
+
+    if (filters.supplier) {
+      params.append('supplier', filters.supplier);
+    }
+
+    const query = params.toString();
+
+    const result = await apiRequest(
+      `/purchases${query ? `?${query}` : ''}`
+    );
+
+    return (result.data || []).map(
+      normalizePurchase
+    );
   },
 
-  // POST /api/purchases
-  createPurchase: async (purchaseData) => {
-    const newId = generatePurchaseId(_purchases);
-    const newPurchase = {
-      id: newId,
-      purchaseId: newId,
-      ...purchaseData,
-      createdAt: new Date().toISOString()
-    };
-    _purchases = [..._purchases, newPurchase];
-    return newPurchase;
-  },
-
-  // PUT /api/purchases/:id
-  updatePurchase: async (id, updatedData) => {
-    _purchases = _purchases.map(p => {
-      if (p.id === id || p.purchaseId === id) {
-        return { ...p, ...updatedData, id: p.id, purchaseId: p.purchaseId, createdAt: p.createdAt };
-      }
-      return p;
-    });
-    return _purchases.find(p => p.id === id || p.purchaseId === id);
-  },
-
-  // DELETE /api/purchases/:id
-  deletePurchase: async (id) => {
-    _purchases = _purchases.filter(p => p.id !== id && p.purchaseId !== id);
-    return { success: true, id };
-  },
-
-  // GET /api/purchases/:id
   getPurchaseById: async (id) => {
-    return _purchases.find(p => p.id === id || p.purchaseId === id) || null;
-  }
+    const result = await apiRequest(
+      `/purchases/${id}`
+    );
+
+    return normalizePurchase(
+      result.data
+    );
+  },
+
+  createPurchase: async (purchaseData) => {
+    const payload = {
+      purchaseId:
+        purchaseData.purchaseId,
+
+      supplierId:
+        purchaseData.supplierId,
+
+      ...(purchaseData.customerId
+        ? {
+            customerId:
+              purchaseData.customerId,
+          }
+        : {}),
+
+      purchaseDate:
+        purchaseData.purchaseDate,
+
+      items: (
+        purchaseData.items || []
+      ).map((item) => ({
+        productId:
+          item.productId,
+
+        quantity: Number(
+          item.quantity
+        ),
+
+        purchasePrice: Number(
+          item.purchasePrice
+        ),
+
+        tax: Number(
+          item.tax || 0
+        ),
+      })),
+
+      subtotal: Number(
+        purchaseData.subtotal || 0
+      ),
+
+      discount: Number(
+        purchaseData.discount || 0
+      ),
+
+      tax: Number(
+        purchaseData.tax || 0
+      ),
+
+      totalAmount: Number(
+        purchaseData.totalAmount || 0
+      ),
+
+      paymentStatus:
+        purchaseData.paymentStatus?.toLowerCase(),
+    };
+
+    const result = await apiRequest(
+      '/purchases',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+
+    return normalizePurchase(
+      result.data
+    );
+  },
 };
 
 export default purchaseService;

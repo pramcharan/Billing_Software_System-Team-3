@@ -1,592 +1,1611 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import purchaseService, { generatePurchaseId } from '../../services/purchaseService';
+import purchaseService, {
+  generatePurchaseId,
+} from '../../services/purchaseService';
+import supplierService from '../../services/supplierService';
 
-// ---------------------------------------------------------------------------
-// Temporary sample data — isolated here so they can be removed easily once
-// the Product and Supplier APIs are available.
-// ---------------------------------------------------------------------------
-// TODO: Replace with GET /api/suppliers when backend is ready
-const TEMP_SUPPLIERS = [
-  // { id: 'SUP-001', companyName: 'Sample Supplier' }
+// ---------------------------------------------------------
+// TEMPORARY PRODUCTS
+// ---------------------------------------------------------
+// IMPORTANT:
+// Team 2's Product API is not connected yet.
+// The backend requires a real productId (MongoDB ObjectId).
+//
+// For now, products are kept empty.
+// Once Team 2 gives us the Product API, we will connect it here.
+// ---------------------------------------------------------
+const TEMP_PRODUCTS = [];
+
+// ---------------------------------------------------------
+// PAYMENT STATUS
+// ---------------------------------------------------------
+const PAYMENT_STATUSES = [
+  'Pending',
+  'Paid',
+  'Partial',
+  'Unpaid',
 ];
 
-// TODO: Replace with GET /api/products when backend is ready
-const TEMP_PRODUCTS = [
-  // { id: 'PRD-001', name: 'Sample Product', price: 0 }
-];
-
-const PAYMENT_STATUSES = ['Pending', 'Paid', 'Partial', 'Cancelled'];
-
-const EMPTY_ITEM = {
+// ---------------------------------------------------------
+// EMPTY ITEM
+// ---------------------------------------------------------
+const createEmptyItem = () => ({
   productId: '',
   productName: '',
   quantity: 1,
-  purchasePrice: '',
+  purchasePrice: 0,
   tax: 0,
   discount: 0,
-  subtotal: 0,
-  total: 0,
-};
-
-// ── Calculation helpers ─────────────────────────────────────────────────────
-const calcItemSubtotal = (item) => {
-  const qty = Number(item.quantity) || 0;
-  const price = Number(item.purchasePrice) || 0;
-  return qty * price;
-};
-
-const calcItemTotal = (item) => {
-  const subtotal = calcItemSubtotal(item);
-  const taxAmt = subtotal * (Number(item.tax) || 0) / 100;
-  const discAmt = subtotal * (Number(item.discount) || 0) / 100;
-  return subtotal + taxAmt - discAmt;
-};
-
-const recalcItem = (item) => ({
-  ...item,
-  subtotal: calcItemSubtotal(item),
-  total: calcItemTotal(item),
 });
 
-const calcTotals = (items) => {
-  const subtotal = items.reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
-  const taxAmount = items.reduce((s, i) => {
-    const sub = Number(i.subtotal) || 0;
-    return s + sub * (Number(i.tax) || 0) / 100;
-  }, 0);
-  const discountAmount = items.reduce((s, i) => {
-    const sub = Number(i.subtotal) || 0;
-    return s + sub * (Number(i.discount) || 0) / 100;
-  }, 0);
-  const grandTotal = subtotal + taxAmount - discountAmount;
-  return { subtotal, taxAmount, discountAmount, grandTotal };
-};
-
-// ── Format helpers ──────────────────────────────────────────────────────────
-const fmt = (v) =>
-  `₹ ${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-// ── PurchaseForm Component ──────────────────────────────────────────────────
+// ---------------------------------------------------------
+// PURCHASE FORM
+// ---------------------------------------------------------
 const PurchaseForm = () => {
   const navigate = useNavigate();
-  const { id } = useParams(); // present when editing
-  const isEdit = Boolean(id);
+  const { id } = useParams();
 
-  // ── Form state ────────────────────────────────────────────────────────────
+  const isEditMode = Boolean(id);
+
+  // -------------------------------------------------------
+  // FORM STATE
+  // -------------------------------------------------------
   const [purchaseId, setPurchaseId] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState(
-    () => new Date().toISOString().split('T')[0]
-  );
   const [supplierId, setSupplierId] = useState('');
-  const [supplierName, setSupplierName] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
+
+  const [items, setItems] = useState([createEmptyItem()]);
+
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [taxAmount, setTaxAmount] = useState(0);
+
   const [paymentStatus, setPaymentStatus] = useState('Pending');
+
   const [notes, setNotes] = useState('');
-  const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
-  const [errors, setErrors] = useState({});
-  const [toastMessage, setToastMessage] = useState(null);
 
-  // ── Load existing purchase if editing ─────────────────────────────────────
+  // -------------------------------------------------------
+  // SUPPLIER STATE
+  // -------------------------------------------------------
+  const [suppliers, setSuppliers] = useState([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+
+  // -------------------------------------------------------
+  // GENERAL STATE
+  // -------------------------------------------------------
+  const [loading, setLoading] = useState(false);
+  const [loadingPurchase, setLoadingPurchase] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // -------------------------------------------------------
+  // LOAD SUPPLIERS
+  // -------------------------------------------------------
+  const loadSuppliers = useCallback(async () => {
+    try {
+      setLoadingSuppliers(true);
+      setError('');
+
+      const data = await supplierService.getSuppliers();
+
+      setSuppliers(data || []);
+    } catch (err) {
+      console.error('Failed to load suppliers:', err);
+
+      setError(
+        err.message ||
+          'Unable to load suppliers. Please make sure the backend is running.'
+      );
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  }, []);
+
+  // -------------------------------------------------------
+  // LOAD PURCHASE WHEN EDITING
+  // -------------------------------------------------------
+  const loadPurchase = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      setLoadingPurchase(true);
+      setError('');
+
+      const purchase = await purchaseService.getPurchaseById(id);
+
+      setPurchaseId(purchase.purchaseId || '');
+
+      setSupplierId(
+        typeof purchase.supplierId === 'object'
+          ? purchase.supplierId?._id
+          : purchase.supplierId || ''
+      );
+
+      setPurchaseDate(
+        purchase.purchaseDate ||
+          new Date().toISOString().split('T')[0]
+      );
+
+      setPaymentStatus(
+        purchase.paymentStatus || 'Pending'
+      );
+
+      setDiscountAmount(
+        Number(purchase.discountAmount || 0)
+      );
+
+      setTaxAmount(
+        Number(purchase.taxAmount || 0)
+      );
+
+      const loadedItems = (purchase.items || []).map((item) => ({
+        productId:
+          typeof item.productId === 'object'
+            ? item.productId?._id || ''
+            : item.productId || '',
+        productName:
+          item.productName || '',
+        quantity: Number(item.quantity || 1),
+        purchasePrice: Number(item.purchasePrice || 0),
+        tax: Number(item.tax || 0),
+        discount: Number(item.discount || 0),
+      }));
+
+      setItems(
+        loadedItems.length > 0
+          ? loadedItems
+          : [createEmptyItem()]
+      );
+    } catch (err) {
+      console.error('Failed to load purchase:', err);
+
+      setError(
+        err.message ||
+          'Unable to load purchase details.'
+      );
+    } finally {
+      setLoadingPurchase(false);
+    }
+  }, [id]);
+
+  // -------------------------------------------------------
+  // INITIAL LOAD
+  // -------------------------------------------------------
   useEffect(() => {
-    if (isEdit) {
-      purchaseService.getPurchaseById(id).then((purchase) => {
-        if (purchase) {
-          setPurchaseId(purchase.purchaseId || purchase.id);
-          setPurchaseDate(purchase.purchaseDate || '');
-          setSupplierId(purchase.supplierId || '');
-          setSupplierName(purchase.supplierName || '');
-          setPaymentStatus(purchase.paymentStatus || 'Pending');
-          setNotes(purchase.notes || '');
-          setItems(
-            purchase.items && purchase.items.length > 0
-              ? purchase.items
-              : [{ ...EMPTY_ITEM }]
-          );
-        } else {
-          navigate('/purchases');
-        }
-      });
+    loadSuppliers();
+  }, [loadSuppliers]);
+
+  useEffect(() => {
+    if (isEditMode) {
+      loadPurchase();
     } else {
-      // Generate a preview ID for new purchases
-      purchaseService.getPurchases().then((existing) => {
-        setPurchaseId(generatePurchaseId(existing));
-      });
+      setPurchaseId('');
+      setItems([createEmptyItem()]);
     }
-  }, [id, isEdit, navigate]);
+  }, [isEditMode, loadPurchase]);
 
-  // ── Computed totals ───────────────────────────────────────────────────────
-  const { subtotal, taxAmount, discountAmount, grandTotal } = calcTotals(items);
+  // -------------------------------------------------------
+  // GENERATE PURCHASE ID
+  // -------------------------------------------------------
+  useEffect(() => {
+    const generateId = async () => {
+      if (isEditMode) return;
 
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+      try {
+        const purchases = await purchaseService.getPurchases();
 
-  // ── Item handlers ─────────────────────────────────────────────────────────
-  const handleAddItem = () => {
-    setItems((prev) => [...prev, { ...EMPTY_ITEM }]);
-  };
+        const newId = generatePurchaseId(purchases);
 
-  const handleRemoveItem = (index) => {
-    if (items.length === 1) return; // keep at least one row
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  };
+        setPurchaseId(newId);
+      } catch (err) {
+        console.error(
+          'Unable to generate purchase ID:',
+          err
+        );
 
-  const handleItemChange = useCallback((index, field, value) => {
-    setItems((prev) => {
-      const updated = prev.map((item, i) => {
-        if (i !== index) return item;
-        const changed = { ...item, [field]: value };
-        // If product selected from dropdown, fill name/price
-        if (field === 'productId') {
-          const product = TEMP_PRODUCTS.find((p) => p.id === value);
-          if (product) {
-            changed.productName = product.name;
-            changed.purchasePrice = product.price;
-          } else {
-            changed.productName = '';
-            changed.purchasePrice = '';
-          }
-        }
-        return recalcItem(changed);
-      });
-      return updated;
-    });
-    // Clear item-level error
-    if (errors[`item_${index}_${field}`]) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[`item_${index}_${field}`];
-        return next;
-      });
-    }
-  }, [errors]);
-
-  // ── Supplier handler ──────────────────────────────────────────────────────
-  const handleSupplierChange = (value) => {
-    setSupplierId(value);
-    const supplier = TEMP_SUPPLIERS.find((s) => s.id === value);
-    setSupplierName(supplier ? supplier.companyName : '');
-    if (errors.supplierId) setErrors((prev) => ({ ...prev, supplierId: '' }));
-  };
-
-  // ── Validation ────────────────────────────────────────────────────────────
-  const validate = () => {
-    const newErrors = {};
-
-    if (!supplierId && !supplierName.trim()) {
-      newErrors.supplierId = 'Supplier is required.';
-    }
-    if (!purchaseDate) {
-      newErrors.purchaseDate = 'Purchase date is required.';
-    }
-    if (items.length === 0) {
-      newErrors.items = 'At least one purchase item is required.';
-    }
-
-    items.forEach((item, i) => {
-      if (!item.productName && !item.productId) {
-        newErrors[`item_${i}_productName`] = 'Product is required.';
+        setPurchaseId(
+          `PUR-${Date.now()}`
+        );
       }
-      const qty = Number(item.quantity);
-      if (!qty || qty <= 0) {
-        newErrors[`item_${i}_quantity`] = 'Quantity must be greater than 0.';
-      }
-      const price = Number(item.purchasePrice);
-      if (item.purchasePrice === '' || item.purchasePrice === undefined) {
-        newErrors[`item_${i}_purchasePrice`] = 'Purchase price is required.';
-      } else if (price < 0) {
-        newErrors[`item_${i}_purchasePrice`] = 'Purchase price cannot be negative.';
-      }
-      if (Number(item.tax) < 0) {
-        newErrors[`item_${i}_tax`] = 'Tax cannot be negative.';
-      }
-      if (Number(item.discount) < 0) {
-        newErrors[`item_${i}_discount`] = 'Discount cannot be negative.';
-      }
-    });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // ── Submit ────────────────────────────────────────────────────────────────
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-
-    const payload = {
-      purchaseId,
-      purchaseDate,
-      supplierId,
-      supplierName,
-      paymentStatus,
-      notes,
-      items,
-      subtotal,
-      taxAmount,
-      discountAmount,
-      grandTotal,
     };
 
-    if (isEdit) {
-      await purchaseService.updatePurchase(id, payload);
-      showToast(`Purchase "${id}" updated successfully!`);
-      setTimeout(() => navigate(`/purchases/${id}`), 1200);
-    } else {
-      const created = await purchaseService.createPurchase(payload);
-      showToast(`Purchase "${created.id}" created successfully!`);
-      setTimeout(() => navigate('/purchases'), 1200);
+    generateId();
+  }, [isEditMode]);
+
+  // -------------------------------------------------------
+  // ITEM CALCULATIONS
+  // -------------------------------------------------------
+  const calculateItemSubtotal = (item) => {
+    const quantity = Number(item.quantity || 0);
+    const purchasePrice = Number(
+      item.purchasePrice || 0
+    );
+
+    return quantity * purchasePrice;
+  };
+
+  const calculateItemTax = (item) => {
+    const subtotal = calculateItemSubtotal(item);
+    const taxRate = Number(item.tax || 0);
+
+    return (subtotal * taxRate) / 100;
+  };
+
+  const calculateItemTotal = (item) => {
+    const subtotal = calculateItemSubtotal(item);
+    const tax = calculateItemTax(item);
+
+    return subtotal + tax;
+  };
+
+  // -------------------------------------------------------
+  // TOTALS
+  // -------------------------------------------------------
+  const subtotal = items.reduce(
+    (total, item) =>
+      total + calculateItemSubtotal(item),
+    0
+  );
+
+  const calculatedItemTax = items.reduce(
+    (total, item) =>
+      total + calculateItemTax(item),
+    0
+  );
+
+  const finalTax =
+    Number(taxAmount || 0) > 0
+      ? Number(taxAmount)
+      : calculatedItemTax;
+
+  const discount =
+    Number(discountAmount || 0);
+
+  const grandTotal =
+    Math.max(
+      0,
+      subtotal - discount + finalTax
+    );
+
+  // -------------------------------------------------------
+  // HANDLE ITEM CHANGE
+  // -------------------------------------------------------
+  const handleItemChange = (
+    index,
+    field,
+    value
+  ) => {
+    setItems((currentItems) =>
+      currentItems.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
+      )
+    );
+  };
+
+  // -------------------------------------------------------
+  // ADD ITEM
+  // -------------------------------------------------------
+  const addItem = () => {
+    setItems((currentItems) => [
+      ...currentItems,
+      createEmptyItem(),
+    ]);
+  };
+
+  // -------------------------------------------------------
+  // REMOVE ITEM
+  // -------------------------------------------------------
+  const removeItem = (index) => {
+    if (items.length === 1) {
+      return;
+    }
+
+    setItems((currentItems) =>
+      currentItems.filter(
+        (_, itemIndex) =>
+          itemIndex !== index
+      )
+    );
+  };
+
+  // -------------------------------------------------------
+  // SELECT PRODUCT
+  // -------------------------------------------------------
+  const handleProductChange = (
+    index,
+    productId
+  ) => {
+    const selectedProduct =
+      TEMP_PRODUCTS.find(
+        (product) =>
+          product.id === productId
+      );
+
+    setItems((currentItems) =>
+      currentItems.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              productId,
+              productName:
+                selectedProduct?.name || '',
+              purchasePrice:
+                selectedProduct?.purchasePrice || 0,
+            }
+          : item
+      )
+    );
+  };
+
+  // -------------------------------------------------------
+  // VALIDATE FORM
+  // -------------------------------------------------------
+  const validateForm = () => {
+    if (!purchaseId.trim()) {
+      return 'Purchase ID is required.';
+    }
+
+    if (!supplierId) {
+      return 'Please select a supplier.';
+    }
+
+    if (!purchaseDate) {
+      return 'Purchase date is required.';
+    }
+
+    if (!items.length) {
+      return 'At least one purchase item is required.';
+    }
+
+    // Backend requires a real Team 2 productId.
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+
+      if (!item.productId) {
+        return `Product is required for item ${index + 1}.`;
+      }
+
+      if (
+        Number(item.quantity) <= 0 ||
+        !item.quantity
+      ) {
+        return `Quantity must be greater than 0 for item ${
+          index + 1
+        }.`;
+      }
+
+      if (
+        Number(item.purchasePrice) < 0 ||
+        item.purchasePrice === ''
+      ) {
+        return `Purchase price cannot be negative for item ${
+          index + 1
+        }.`;
+      }
+
+      if (Number(item.tax || 0) < 0) {
+        return `Tax cannot be negative for item ${
+          index + 1
+        }.`;
+      }
+    }
+
+    if (discount < 0) {
+      return 'Discount cannot be negative.';
+    }
+
+    if (discount > subtotal) {
+      return 'Discount cannot be greater than subtotal.';
+    }
+
+    if (finalTax < 0) {
+      return 'Tax cannot be negative.';
+    }
+
+    if (!PAYMENT_STATUSES.includes(paymentStatus)) {
+      return 'Please select a valid payment status.';
+    }
+
+    return '';
+  };
+
+  // -------------------------------------------------------
+  // SUBMIT PURCHASE
+  // -------------------------------------------------------
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setError('');
+    setSuccessMessage('');
+
+    // -----------------------------------------------------
+    // PURCHASE EDIT IS NOT SUPPORTED BY CURRENT BACKEND
+    // -----------------------------------------------------
+    if (isEditMode) {
+      setError(
+        'Purchase editing is currently not supported by the Team 3 backend. Please create a new purchase instead.'
+      );
+      return;
+    }
+
+    const validationError = validateForm();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // ---------------------------------------------------
+      // CONVERT FRONTEND ITEMS TO BACKEND FORMAT
+      // ---------------------------------------------------
+      const backendItems = items.map((item) => ({
+        productId: item.productId,
+        quantity: Number(item.quantity),
+        purchasePrice: Number(
+          item.purchasePrice
+        ),
+        tax: Number(item.tax || 0),
+      }));
+
+      // ---------------------------------------------------
+      // BACKEND PAYLOAD
+      // ---------------------------------------------------
+      const payload = {
+        purchaseId: purchaseId.trim(),
+
+        supplierId,
+
+        purchaseDate,
+
+        items: backendItems,
+
+        subtotal: Number(
+          subtotal.toFixed(2)
+        ),
+
+        discount: Number(
+          discount.toFixed(2)
+        ),
+
+        tax: Number(
+          finalTax.toFixed(2)
+        ),
+
+        totalAmount: Number(
+          grandTotal.toFixed(2)
+        ),
+
+        paymentStatus:
+          paymentStatus.toLowerCase(),
+      };
+
+      console.log(
+        'Creating purchase:',
+        payload
+      );
+
+      // ---------------------------------------------------
+      // SEND TO BACKEND
+      // ---------------------------------------------------
+      const createdPurchase =
+        await purchaseService.createPurchase(
+          payload
+        );
+
+      console.log(
+        'Purchase created successfully:',
+        createdPurchase
+      );
+
+      setSuccessMessage(
+        'Purchase created successfully.'
+      );
+
+      // ---------------------------------------------------
+      // GO TO PURCHASE LIST
+      // ---------------------------------------------------
+      setTimeout(() => {
+        navigate('/purchases');
+      }, 1000);
+    } catch (err) {
+      console.error(
+        'Failed to create purchase:',
+        err
+      );
+
+      // Backend validation errors
+      if (
+        err.errors &&
+        Array.isArray(err.errors) &&
+        err.errors.length > 0
+      ) {
+        setError(
+          err.errors
+            .map(
+              (errorItem) =>
+                errorItem.message ||
+                errorItem.msg ||
+                String(errorItem)
+            )
+            .join(' ')
+        );
+      } else {
+        setError(
+          err.message ||
+            'Failed to create purchase. Please try again.'
+        );
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  return (
-    <div className="team3-customer-module">
-      {/* Toast */}
-      {toastMessage && (
-        <div className="team3-toast">
-          <span>✅ {toastMessage}</span>
-        </div>
-      )}
+  // -------------------------------------------------------
+  // CANCEL
+  // -------------------------------------------------------
+  const handleCancel = () => {
+    navigate('/purchases');
+  };
 
-      {/* Page Header */}
-      <div className="team3-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div className="team3-title-group">
-          <h1>{isEdit ? 'Edit Purchase' : 'Create Purchase'}</h1>
-          <p>{isEdit ? `Editing purchase order ${id}` : 'Fill in the details to create a new purchase order.'}</p>
+  // -------------------------------------------------------
+  // LOADING PURCHASE
+  // -------------------------------------------------------
+  if (loadingPurchase) {
+    return (
+      <div
+        style={{
+          padding: '30px',
+          textAlign: 'center',
+        }}
+      >
+        <h3>Loading purchase...</h3>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------
+  // PAGE
+  // -------------------------------------------------------
+  return (
+    <div
+      style={{
+        padding: '24px',
+        maxWidth: '1200px',
+        margin: '0 auto',
+      }}
+    >
+      {/* ------------------------------------------------- */}
+      {/* HEADER */}
+      {/* ------------------------------------------------- */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '24px',
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              margin: 0,
+              marginBottom: '6px',
+            }}
+          >
+            {isEditMode
+              ? 'Edit Purchase'
+              : 'Create Purchase'}
+          </h1>
+
+          <p
+            style={{
+              margin: 0,
+              color: '#666',
+            }}
+          >
+            Manage purchase information and items
+          </p>
         </div>
-        <button className="team3-btn team3-btn-secondary" onClick={() => navigate('/purchases')}>
-          ← Back to Purchases
+
+        <button
+          type="button"
+          onClick={handleCancel}
+          style={{
+            padding: '10px 18px',
+            border: '1px solid #ccc',
+            background: '#fff',
+            borderRadius: '6px',
+            cursor: 'pointer',
+          }}
+        >
+          Back
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} noValidate>
-        {/* ── Header Details Card ── */}
-        <div className="team3-card purch-form-card">
-          <div className="purch-form-section-header">
-            <h2>Purchase Details</h2>
-          </div>
-          <div className="purch-form-body">
-            <div className="team3-form-grid purch-header-grid">
-              {/* Purchase ID */}
-              <div className="team3-form-group">
-                <label htmlFor="purch-id">Purchase ID</label>
-                <input
-                  type="text"
-                  id="purch-id"
-                  value={purchaseId}
-                  readOnly
-                  className="team3-form-input purch-readonly"
-                  title="Auto-generated Purchase ID"
-                />
-              </div>
+      {/* ------------------------------------------------- */}
+      {/* ERROR */}
+      {/* ------------------------------------------------- */}
+      {error && (
+        <div
+          style={{
+            background: '#ffecec',
+            border: '1px solid #f5b5b5',
+            color: '#b00020',
+            padding: '12px 16px',
+            borderRadius: '6px',
+            marginBottom: '16px',
+          }}
+        >
+          {error}
+        </div>
+      )}
 
-              {/* Purchase Date */}
-              <div className="team3-form-group">
-                <label htmlFor="purch-date">
-                  Purchase Date <span className="required">*</span>
-                </label>
-                <input
-                  type="date"
-                  id="purch-date"
-                  value={purchaseDate}
-                  onChange={(e) => {
-                    setPurchaseDate(e.target.value);
-                    if (errors.purchaseDate) setErrors((prev) => ({ ...prev, purchaseDate: '' }));
-                  }}
-                  className={`team3-form-input ${errors.purchaseDate ? 'invalid' : ''}`}
-                />
-                {errors.purchaseDate && (
-                  <span className="team3-error-text">{errors.purchaseDate}</span>
-                )}
-              </div>
+      {/* ------------------------------------------------- */}
+      {/* SUCCESS */}
+      {/* ------------------------------------------------- */}
+      {successMessage && (
+        <div
+          style={{
+            background: '#eaf8ea',
+            border: '1px solid #a8d8a8',
+            color: '#176b17',
+            padding: '12px 16px',
+            borderRadius: '6px',
+            marginBottom: '16px',
+          }}
+        >
+          {successMessage}
+        </div>
+      )}
 
-              {/* Supplier */}
-              <div className="team3-form-group">
-                <label htmlFor="purch-supplier">
-                  Supplier <span className="required">*</span>
-                </label>
-                {/* TODO: Replace with dynamic supplier dropdown from GET /api/suppliers */}
-                {TEMP_SUPPLIERS.length > 0 ? (
-                  <select
-                    id="purch-supplier"
-                    value={supplierId}
-                    onChange={(e) => handleSupplierChange(e.target.value)}
-                    className={`team3-form-select ${errors.supplierId ? 'invalid' : ''}`}
+      {/* ------------------------------------------------- */}
+      {/* EDIT MODE WARNING */}
+      {/* ------------------------------------------------- */}
+      {isEditMode && (
+        <div
+          style={{
+            background: '#fff8e1',
+            border: '1px solid #f0d98c',
+            color: '#725900',
+            padding: '12px 16px',
+            borderRadius: '6px',
+            marginBottom: '16px',
+          }}
+        >
+          Purchase editing is not available because the
+          current backend does not provide a PUT purchase
+          endpoint.
+        </div>
+      )}
+
+      {/* ------------------------------------------------- */}
+      {/* FORM */}
+      {/* ------------------------------------------------- */}
+      <form onSubmit={handleSubmit}>
+        {/* ----------------------------------------------- */}
+        {/* BASIC INFORMATION */}
+        {/* ----------------------------------------------- */}
+        <div
+          style={{
+            background: '#fff',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBottom: '20px',
+          }}
+        >
+          <h2
+            style={{
+              marginTop: 0,
+              marginBottom: '20px',
+            }}
+          >
+            Purchase Information
+          </h2>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(3, 1fr)',
+              gap: '16px',
+            }}
+          >
+            {/* PURCHASE ID */}
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '6px',
+                  fontWeight: 600,
+                }}
+              >
+                Purchase ID
+              </label>
+
+              <input
+                type="text"
+                value={purchaseId}
+                onChange={(event) =>
+                  setPurchaseId(
+                    event.target.value
+                  )
+                }
+                disabled={isEditMode}
+                placeholder="PUR-001"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '6px',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* SUPPLIER */}
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '6px',
+                  fontWeight: 600,
+                }}
+              >
+                Supplier *
+              </label>
+
+              <select
+                value={supplierId}
+                onChange={(event) =>
+                  setSupplierId(
+                    event.target.value
+                  )
+                }
+                disabled={loadingSuppliers}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '6px',
+                  boxSizing: 'border-box',
+                  background: '#fff',
+                }}
+              >
+                <option value="">
+                  {loadingSuppliers
+                    ? 'Loading suppliers...'
+                    : 'Select Supplier'}
+                </option>
+
+                {suppliers.map((supplier) => (
+                  <option
+                    key={
+                      supplier.id ||
+                      supplier._id
+                    }
+                    value={
+                      supplier.id ||
+                      supplier._id
+                    }
                   >
-                    <option value="">— Select Supplier —</option>
-                    {TEMP_SUPPLIERS.map((s) => (
-                      <option key={s.id} value={s.id}>{s.companyName}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    id="purch-supplier"
-                    value={supplierName}
-                    onChange={(e) => {
-                      setSupplierName(e.target.value);
-                      if (errors.supplierId) setErrors((prev) => ({ ...prev, supplierId: '' }));
+                    {supplier.companyName}
+                  </option>
+                ))}
+              </select>
+
+              {!loadingSuppliers &&
+                suppliers.length === 0 && (
+                  <small
+                    style={{
+                      display: 'block',
+                      marginTop: '6px',
+                      color: '#b00020',
                     }}
-                    placeholder="Enter supplier name"
-                    className={`team3-form-input ${errors.supplierId ? 'invalid' : ''}`}
-                  />
+                  >
+                    No suppliers found. Please
+                    create a supplier first.
+                  </small>
                 )}
-                {errors.supplierId && (
-                  <span className="team3-error-text">{errors.supplierId}</span>
-                )}
-                {TEMP_SUPPLIERS.length === 0 && (
-                  <span className="team3-hint-text">
-                    Supplier dropdown will connect to API when available.
-                  </span>
-                )}
-              </div>
+            </div>
 
-              {/* Payment Status */}
-              <div className="team3-form-group">
-                <label htmlFor="purch-payment-status">Payment Status</label>
-                <select
-                  id="purch-payment-status"
-                  value={paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value)}
-                  className="team3-form-select"
-                >
-                  {PAYMENT_STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
+            {/* PURCHASE DATE */}
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '6px',
+                  fontWeight: 600,
+                }}
+              >
+                Purchase Date *
+              </label>
 
-              {/* Notes */}
-              <div className="team3-form-group" style={{ gridColumn: 'span 2' }}>
-                <label htmlFor="purch-notes">Notes (Optional)</label>
-                <textarea
-                  id="purch-notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Additional notes or remarks for this purchase..."
-                  className="team3-form-textarea"
-                  rows="2"
-                />
-              </div>
+              <input
+                type="date"
+                value={purchaseDate}
+                onChange={(event) =>
+                  setPurchaseDate(
+                    event.target.value
+                  )
+                }
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '6px',
+                  boxSizing: 'border-box',
+                }}
+              />
             </div>
           </div>
         </div>
 
-        {/* ── Purchase Items Card ── */}
-        <div className="team3-card purch-form-card" style={{ marginTop: '1.25rem' }}>
-          <div className="purch-form-section-header">
-            <h2>Purchase Items</h2>
+        {/* ----------------------------------------------- */}
+        {/* PRODUCTS / ITEMS */}
+        {/* ----------------------------------------------- */}
+        <div
+          style={{
+            background: '#fff',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBottom: '20px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  marginBottom: '5px',
+                }}
+              >
+                Purchase Items
+              </h2>
+
+              <small
+                style={{
+                  color: '#666',
+                }}
+              >
+                Products must come from Team 2
+                inventory.
+              </small>
+            </div>
+
             <button
               type="button"
-              className="team3-btn team3-btn-primary"
-              onClick={handleAddItem}
+              onClick={addItem}
+              style={{
+                padding: '9px 15px',
+                border: 'none',
+                background: '#2563eb',
+                color: '#fff',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
             >
-              <span>+</span> Add Item
+              + Add Item
             </button>
           </div>
 
-          {errors.items && (
-            <div className="purch-form-items-error">
-              <span className="team3-error-text">⚠ {errors.items}</span>
+          {/* TEAM 2 PRODUCT NOTICE */}
+          {TEMP_PRODUCTS.length === 0 && (
+            <div
+              style={{
+                background: '#fff8e1',
+                border:
+                  '1px solid #f0d98c',
+                color: '#725900',
+                padding: '12px',
+                borderRadius: '6px',
+                marginBottom: '16px',
+              }}
+            >
+              <strong>
+                Team 2 Product API required:
+              </strong>{' '}
+              The purchase backend requires a
+              real Product ID. The product dropdown
+              will be connected to Team 2 inventory
+              once their Product API is available.
             </div>
           )}
 
-          <div className="purch-items-table-wrapper">
-            <table className="team3-table purch-items-table">
-              <thead>
-                <tr>
-                  <th style={{ minWidth: '220px' }}>Product <span className="required">*</span></th>
-                  <th style={{ minWidth: '100px' }}>Qty <span className="required">*</span></th>
-                  <th style={{ minWidth: '140px' }}>Purchase Price <span className="required">*</span></th>
-                  <th style={{ minWidth: '90px' }}>Tax (%)</th>
-                  <th style={{ minWidth: '100px' }}>Discount (%)</th>
-                  <th style={{ minWidth: '120px' }}>Subtotal</th>
-                  <th style={{ minWidth: '120px' }}>Total</th>
-                  <th style={{ minWidth: '60px' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => (
-                  <tr key={index} className="purch-item-row">
-                    {/* Product */}
-                    <td>
-                      {TEMP_PRODUCTS.length > 0 ? (
-                        <select
-                          id={`item-product-${index}`}
-                          value={item.productId}
-                          onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
-                          className={`team3-form-select purch-item-input ${errors[`item_${index}_productName`] ? 'invalid' : ''}`}
-                        >
-                          <option value="">— Select Product —</option>
-                          {TEMP_PRODUCTS.map((p) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          id={`item-product-${index}`}
-                          value={item.productName}
-                          onChange={(e) => handleItemChange(index, 'productName', e.target.value)}
-                          placeholder="Product name"
-                          className={`team3-form-input purch-item-input ${errors[`item_${index}_productName`] ? 'invalid' : ''}`}
-                        />
+          {items.map((item, index) => (
+            <div
+              key={index}
+              style={{
+                border: '1px solid #e2e2e2',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '14px',
+              }}
+            >
+              {/* ITEM HEADER */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent:
+                    'space-between',
+                  alignItems: 'center',
+                  marginBottom: '15px',
+                }}
+              >
+                <strong>
+                  Item {index + 1}
+                </strong>
+
+                {items.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeItem(index)
+                    }
+                    style={{
+                      border: 'none',
+                      background:
+                        '#ffecec',
+                      color: '#b00020',
+                      padding:
+                        '7px 10px',
+                      borderRadius:
+                        '5px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns:
+                    '2fr 1fr 1fr 1fr',
+                  gap: '14px',
+                }}
+              >
+                {/* PRODUCT */}
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom:
+                        '6px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Product *
+                  </label>
+
+                  {TEMP_PRODUCTS.length > 0 ? (
+                    <select
+                      value={
+                        item.productId
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        handleProductChange(
+                          index,
+                          event.target
+                            .value
+                        )
+                      }
+                      style={{
+                        width: '100%',
+                        padding:
+                          '10px',
+                        border:
+                          '1px solid #ccc',
+                        borderRadius:
+                          '6px',
+                        boxSizing:
+                          'border-box',
+                        background:
+                          '#fff',
+                      }}
+                    >
+                      <option value="">
+                        Select Product
+                      </option>
+
+                      {TEMP_PRODUCTS.map(
+                        (product) => (
+                          <option
+                            key={
+                              product.id
+                            }
+                            value={
+                              product.id
+                            }
+                          >
+                            {
+                              product.name
+                            }
+                          </option>
+                        )
                       )}
-                      {errors[`item_${index}_productName`] && (
-                        <span className="team3-error-text" style={{ fontSize: '0.75rem' }}>
-                          {errors[`item_${index}_productName`]}
-                        </span>
-                      )}
-                    </td>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={
+                        item.productName
+                      }
+                      disabled
+                      placeholder="Waiting for Team 2 Product API"
+                      style={{
+                        width:
+                          '100%',
+                        padding:
+                          '10px',
+                        border:
+                          '1px solid #ccc',
+                        borderRadius:
+                          '6px',
+                        boxSizing:
+                          'border-box',
+                        background:
+                          '#f5f5f5',
+                      }}
+                    />
+                  )}
+                </div>
 
-                    {/* Quantity */}
-                    <td>
-                      <input
-                        type="number"
-                        id={`item-qty-${index}`}
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                        min="1"
-                        className={`team3-form-input purch-item-input purch-item-input--num ${errors[`item_${index}_quantity`] ? 'invalid' : ''}`}
-                      />
-                      {errors[`item_${index}_quantity`] && (
-                        <span className="team3-error-text" style={{ fontSize: '0.75rem' }}>
-                          {errors[`item_${index}_quantity`]}
-                        </span>
-                      )}
-                    </td>
+                {/* QUANTITY */}
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom:
+                        '6px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Quantity *
+                  </label>
 
-                    {/* Purchase Price */}
-                    <td>
-                      <div className="purch-price-input-wrap">
-                        <span className="purch-price-prefix">₹</span>
-                        <input
-                          type="number"
-                          id={`item-price-${index}`}
-                          value={item.purchasePrice}
-                          onChange={(e) => handleItemChange(index, 'purchasePrice', e.target.value)}
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                          className={`team3-form-input purch-item-input purch-item-input--price ${errors[`item_${index}_purchasePrice`] ? 'invalid' : ''}`}
-                        />
-                      </div>
-                      {errors[`item_${index}_purchasePrice`] && (
-                        <span className="team3-error-text" style={{ fontSize: '0.75rem' }}>
-                          {errors[`item_${index}_purchasePrice`]}
-                        </span>
-                      )}
-                    </td>
+                  <input
+                    type="number"
+                    min="1"
+                    value={
+                      item.quantity
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      handleItemChange(
+                        index,
+                        'quantity',
+                        event.target
+                          .value
+                      )
+                    }
+                    style={{
+                      width:
+                        '100%',
+                      padding:
+                        '10px',
+                      border:
+                        '1px solid #ccc',
+                      borderRadius:
+                        '6px',
+                      boxSizing:
+                        'border-box',
+                    }}
+                  />
+                </div>
 
-                    {/* Tax % */}
-                    <td>
-                      <div className="purch-pct-input-wrap">
-                        <input
-                          type="number"
-                          id={`item-tax-${index}`}
-                          value={item.tax}
-                          onChange={(e) => handleItemChange(index, 'tax', e.target.value)}
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          className={`team3-form-input purch-item-input purch-item-input--num ${errors[`item_${index}_tax`] ? 'invalid' : ''}`}
-                        />
-                        <span className="purch-pct-suffix">%</span>
-                      </div>
-                      {errors[`item_${index}_tax`] && (
-                        <span className="team3-error-text" style={{ fontSize: '0.75rem' }}>
-                          {errors[`item_${index}_tax`]}
-                        </span>
-                      )}
-                    </td>
+                {/* PURCHASE PRICE */}
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom:
+                        '6px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Purchase Price *
+                  </label>
 
-                    {/* Discount % */}
-                    <td>
-                      <div className="purch-pct-input-wrap">
-                        <input
-                          type="number"
-                          id={`item-discount-${index}`}
-                          value={item.discount}
-                          onChange={(e) => handleItemChange(index, 'discount', e.target.value)}
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          className={`team3-form-input purch-item-input purch-item-input--num ${errors[`item_${index}_discount`] ? 'invalid' : ''}`}
-                        />
-                        <span className="purch-pct-suffix">%</span>
-                      </div>
-                      {errors[`item_${index}_discount`] && (
-                        <span className="team3-error-text" style={{ fontSize: '0.75rem' }}>
-                          {errors[`item_${index}_discount`]}
-                        </span>
-                      )}
-                    </td>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={
+                      item.purchasePrice
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      handleItemChange(
+                        index,
+                        'purchasePrice',
+                        event.target
+                          .value
+                      )
+                    }
+                    style={{
+                      width:
+                        '100%',
+                      padding:
+                        '10px',
+                      border:
+                        '1px solid #ccc',
+                      borderRadius:
+                        '6px',
+                      boxSizing:
+                        'border-box',
+                    }}
+                  />
+                </div>
 
-                    {/* Subtotal (read-only) */}
-                    <td>
-                      <span className="purch-calc-value">{fmt(item.subtotal)}</span>
-                    </td>
+                {/* TAX */}
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom:
+                        '6px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Tax %
+                  </label>
 
-                    {/* Total (read-only) */}
-                    <td>
-                      <span className="purch-calc-value purch-calc-value--accent">{fmt(item.total)}</span>
-                    </td>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={
+                      item.tax
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      handleItemChange(
+                        index,
+                        'tax',
+                        event.target
+                          .value
+                      )
+                    }
+                    style={{
+                      width:
+                        '100%',
+                      padding:
+                        '10px',
+                      border:
+                        '1px solid #ccc',
+                      borderRadius:
+                        '6px',
+                      boxSizing:
+                        'border-box',
+                    }}
+                  />
+                </div>
+              </div>
 
-                    {/* Remove */}
-                    <td>
-                      <button
-                        type="button"
-                        className="team3-action-btn delete"
-                        onClick={() => handleRemoveItem(index)}
-                        title="Remove item"
-                        disabled={items.length === 1}
-                        style={{ opacity: items.length === 1 ? 0.3 : 1 }}
-                      >
-                        🗑️
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              {/* ITEM TOTAL */}
+              <div
+                style={{
+                  textAlign: 'right',
+                  marginTop: '12px',
+                  color: '#444',
+                }}
+              >
+                Item Total:{' '}
+                <strong>
+                  ₹
+                  {calculateItemTotal(
+                    item
+                  ).toFixed(2)}
+                </strong>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ----------------------------------------------- */}
+        {/* PAYMENT + NOTES */}
+        {/* ----------------------------------------------- */}
+        <div
+          style={{
+            background: '#fff',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBottom: '20px',
+          }}
+        >
+          <h2
+            style={{
+              marginTop: 0,
+              marginBottom: '20px',
+            }}
+          >
+            Payment Information
+          </h2>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(3, 1fr)',
+              gap: '16px',
+            }}
+          >
+            {/* DISCOUNT */}
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom:
+                    '6px',
+                  fontWeight: 600,
+                }}
+              >
+                Discount
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={
+                  discountAmount
+                }
+                onChange={(
+                  event
+                ) =>
+                  setDiscountAmount(
+                    event.target
+                      .value
+                  )
+                }
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border:
+                    '1px solid #ccc',
+                  borderRadius:
+                    '6px',
+                  boxSizing:
+                    'border-box',
+                }}
+              />
+            </div>
+
+            {/* TAX */}
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom:
+                    '6px',
+                  fontWeight: 600,
+                }}
+              >
+                Total Tax
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={
+                  taxAmount
+                }
+                onChange={(
+                  event
+                ) =>
+                  setTaxAmount(
+                    event.target
+                      .value
+                  )
+                }
+                placeholder="Leave 0 to calculate from items"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border:
+                    '1px solid #ccc',
+                  borderRadius:
+                    '6px',
+                  boxSizing:
+                    'border-box',
+                }}
+              />
+            </div>
+
+            {/* PAYMENT STATUS */}
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom:
+                    '6px',
+                  fontWeight: 600,
+                }}
+              >
+                Payment Status *
+              </label>
+
+              <select
+                value={
+                  paymentStatus
+                }
+                onChange={(
+                  event
+                ) =>
+                  setPaymentStatus(
+                    event.target
+                      .value
+                  )
+                }
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border:
+                    '1px solid #ccc',
+                  borderRadius:
+                    '6px',
+                  boxSizing:
+                    'border-box',
+                  background:
+                    '#fff',
+                }}
+              >
+                {PAYMENT_STATUSES.map(
+                  (status) => (
+                    <option
+                      key={status}
+                      value={status}
+                    >
+                      {status}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
           </div>
 
-          {/* Totals Summary */}
-          <div className="purch-totals-section">
-            <div className="purch-totals-grid">
-              <div className="purch-total-row">
-                <span className="purch-total-label">Items Subtotal</span>
-                <span className="purch-total-value">{fmt(subtotal)}</span>
-              </div>
-              <div className="purch-total-row">
-                <span className="purch-total-label">Tax Amount</span>
-                <span className="purch-total-value purch-total-tax">+ {fmt(taxAmount)}</span>
-              </div>
-              <div className="purch-total-row">
-                <span className="purch-total-label">Discount Amount</span>
-                <span className="purch-total-value purch-total-discount">− {fmt(discountAmount)}</span>
-              </div>
-              <div className="purch-total-row purch-grand-total-row">
-                <span className="purch-total-label">Grand Total</span>
-                <span className="purch-total-value purch-grand-total">{fmt(grandTotal)}</span>
-              </div>
+          {/* NOTES */}
+          <div
+            style={{
+              marginTop: '16px',
+            }}
+          >
+            <label
+              style={{
+                display: 'block',
+                marginBottom:
+                  '6px',
+                fontWeight: 600,
+              }}
+            >
+              Notes
+            </label>
+
+            <textarea
+              value={notes}
+              onChange={(
+                event
+              ) =>
+                setNotes(
+                  event.target
+                    .value
+                )
+              }
+              rows="3"
+              placeholder="Optional notes"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border:
+                  '1px solid #ccc',
+                borderRadius:
+                  '6px',
+                boxSizing:
+                  'border-box',
+                resize: 'vertical',
+              }}
+            />
+
+            <small
+              style={{
+                color: '#777',
+              }}
+            >
+              Note: Notes are currently
+              displayed in the form but are not
+              stored because the current backend
+              Purchase model does not have a notes
+              field.
+            </small>
+          </div>
+        </div>
+
+        {/* ----------------------------------------------- */}
+        {/* TOTAL SUMMARY */}
+        {/* ----------------------------------------------- */}
+        <div
+          style={{
+            background: '#f8f9fa',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBottom: '20px',
+          }}
+        >
+          <h2
+            style={{
+              marginTop: 0,
+              marginBottom: '18px',
+            }}
+          >
+            Purchase Summary
+          </h2>
+
+          <div
+            style={{
+              maxWidth: '400px',
+              marginLeft: 'auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent:
+                  'space-between',
+                marginBottom: '10px',
+              }}
+            >
+              <span>
+                Subtotal
+              </span>
+
+              <strong>
+                ₹{subtotal.toFixed(2)}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent:
+                  'space-between',
+                marginBottom: '10px',
+              }}
+            >
+              <span>
+                Discount
+              </span>
+
+              <strong>
+                - ₹{discount.toFixed(2)}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent:
+                  'space-between',
+                marginBottom: '10px',
+              }}
+            >
+              <span>
+                Tax
+              </span>
+
+              <strong>
+                ₹{finalTax.toFixed(2)}
+              </strong>
+            </div>
+
+            <hr />
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent:
+                  'space-between',
+                fontSize: '20px',
+                marginTop: '14px',
+              }}
+            >
+              <strong>
+                Grand Total
+              </strong>
+
+              <strong>
+                ₹{grandTotal.toFixed(2)}
+              </strong>
             </div>
           </div>
         </div>
 
-        {/* ── Form Actions ── */}
-        <div className="purch-form-actions">
+        {/* ----------------------------------------------- */}
+        {/* BUTTONS */}
+        {/* ----------------------------------------------- */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '12px',
+            marginBottom: '30px',
+          }}
+        >
           <button
             type="button"
-            className="team3-btn team3-btn-secondary"
-            onClick={() => navigate('/purchases')}
+            onClick={handleCancel}
+            style={{
+              padding: '11px 20px',
+              border:
+                '1px solid #ccc',
+              background: '#fff',
+              borderRadius:
+                '6px',
+              cursor: 'pointer',
+            }}
           >
             Cancel
           </button>
-          <button type="submit" className="team3-btn team3-btn-primary">
-            {isEdit ? '✔ Update Purchase' : '✔ Save Purchase'}
+
+          <button
+            type="submit"
+            disabled={
+              loading ||
+              loadingSuppliers ||
+              isEditMode
+            }
+            style={{
+              padding: '11px 22px',
+              border: 'none',
+              background:
+                loading ||
+                loadingSuppliers ||
+                isEditMode
+                  ? '#999'
+                  : '#2563eb',
+              color: '#fff',
+              borderRadius:
+                '6px',
+              cursor:
+                loading ||
+                loadingSuppliers ||
+                isEditMode
+                  ? 'not-allowed'
+                  : 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            {loading
+              ? 'Saving...'
+              : 'Create Purchase'}
           </button>
         </div>
       </form>

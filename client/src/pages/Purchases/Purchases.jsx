@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FaSearch, FaShoppingCart, FaCheckCircle, FaClock, FaDollarSign } from 'react-icons/fa';
 
 import purchaseService from '../../services/purchaseService';
 import supplierService from '../../services/supplierService';
@@ -326,7 +327,7 @@ const Purchases = () => {
           </div>
 
           <div className="team3-stat-icon total">
-            🛒
+            <FaShoppingCart />
           </div>
         </div>
 
@@ -342,7 +343,7 @@ const Purchases = () => {
           </div>
 
           <div className="team3-stat-icon active">
-            ✅
+            <FaCheckCircle />
           </div>
         </div>
 
@@ -358,7 +359,7 @@ const Purchases = () => {
           </div>
 
           <div className="team3-stat-icon inactive">
-            ⏳
+            <FaClock />
           </div>
         </div>
 
@@ -380,7 +381,7 @@ const Purchases = () => {
           </div>
 
           <div className="team3-stat-icon total">
-            💰
+            <FaDollarSign />
           </div>
         </div>
 
@@ -406,7 +407,7 @@ const Purchases = () => {
               }}
             >
               <span className="team3-search-icon">
-                🔍
+                <FaSearch />
               </span>
 
               <input
@@ -867,8 +868,8 @@ const Purchases = () => {
                           supplierFilter ||
                           paymentStatusFilter !==
                             'All'
-                            ? '🔍'
-                            : '🛒'}
+                            ? <FaSearch />
+                            : <FaShoppingCart />}
                         </div>
 
                         <p

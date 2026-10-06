@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FaSearch } from 'react-icons/fa';
 import purchaseService from '../../services/purchaseService';
 
 // ---------------------------------------------------------------------------
@@ -105,7 +106,7 @@ const PurchaseHistory = () => {
         <div className="purch-history-filters">
           {/* Search */}
           <div className="team3-search-box" style={{ maxWidth: '300px' }}>
-            <span className="team3-search-icon">🔍</span>
+            <span className="team3-search-icon"><FaSearch /></span>
             <input
               type="text"
               id="history-search"
@@ -240,7 +241,7 @@ const PurchaseHistory = () => {
                   <td colSpan="7">
                     <div className="team3-empty-state">
                       <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>
-                        {hasFilters ? '🔍' : '📋'}
+                        {hasFilters ? <FaSearch /> : '📋'}
                       </div>
                       <p style={{ fontWeight: 600, color: '#374151', margin: '0 0 0.25rem' }}>
                         {hasFilters

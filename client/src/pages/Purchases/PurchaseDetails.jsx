@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { FaSearch } from 'react-icons/fa';
 import purchaseService from '../../services/purchaseService';
 
 const fmt = (v) =>
@@ -34,7 +35,7 @@ const PurchaseDetails = () => {
     return (
       <div className="team3-customer-module">
         <div className="team3-empty-state" style={{ minHeight: '60vh', justifyContent: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔍</div>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}><FaSearch /></div>
           <p style={{ fontWeight: 700, fontSize: '1.1rem', color: '#374151' }}>Purchase Not Found</p>
           <p style={{ color: '#6b7280' }}>The purchase you're looking for doesn't exist or may have been deleted.</p>
           <button

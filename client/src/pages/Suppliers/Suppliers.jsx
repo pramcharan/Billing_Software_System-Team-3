@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FaSearch, FaTruck, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import supplierService from '../../services/supplierService';
 import SupplierForm from './SupplierForm';
 import SupplierDetails from './SupplierDetails';
@@ -128,21 +129,21 @@ const Suppliers = () => {
             <span>Total Suppliers</span>
             <h3>{totalCount}</h3>
           </div>
-          <div className="team3-stat-icon total">🚚</div>
+          <div className="team3-stat-icon total"><FaTruck /></div>
         </div>
         <div className="team3-stat-card">
           <div className="team3-stat-info">
             <span>Active Suppliers</span>
             <h3>{activeCount}</h3>
           </div>
-          <div className="team3-stat-icon active">✅</div>
+          <div className="team3-stat-icon active"><FaCheckCircle /></div>
         </div>
         <div className="team3-stat-card">
           <div className="team3-stat-info">
             <span>Inactive Suppliers</span>
             <h3>{inactiveCount}</h3>
           </div>
-          <div className="team3-stat-icon inactive">⚠️</div>
+          <div className="team3-stat-icon inactive"><FaExclamationTriangle /></div>
         </div>
       </div>
 
@@ -151,7 +152,7 @@ const Suppliers = () => {
         {/* Controls */}
         <div className="team3-control-bar">
           <div className="team3-search-box">
-            <span className="team3-search-icon">🔍</span>
+            <span className="team3-search-icon"><FaSearch /></span>
             <input
               type="text"
               id="supplier-search"
@@ -274,7 +275,7 @@ const Suppliers = () => {
                   <td colSpan="8">
                     <div className="team3-empty-state">
                       <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>
-                        {searchQuery || statusFilter !== 'All' ? '🔍' : '🚚'}
+                        {searchQuery || statusFilter !== 'All' ? <FaSearch /> : <FaTruck />}
                       </div>
                       <p style={{ fontWeight: 600, color: '#374151', margin: '0 0 0.25rem' }}>
                         {searchQuery || statusFilter !== 'All'

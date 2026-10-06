@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FaSearch, FaUsers, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import customerService from '../../services/customerService';
 import CustomerForm from './CustomerForm';
 import CustomerDetails from './CustomerDetails';
@@ -128,7 +129,7 @@ export const Customers = () => {
             <span>Total Customers</span>
             <h3>{totalCount}</h3>
           </div>
-          <div className="team3-stat-icon total">👥</div>
+          <div className="team3-stat-icon total"><FaUsers /></div>
         </div>
 
         <div className="team3-stat-card">
@@ -136,7 +137,7 @@ export const Customers = () => {
             <span>Active Accounts</span>
             <h3>{activeCount}</h3>
           </div>
-          <div className="team3-stat-icon active">✅</div>
+          <div className="team3-stat-icon active"><FaCheckCircle /></div>
         </div>
 
         <div className="team3-stat-card">
@@ -144,7 +145,7 @@ export const Customers = () => {
             <span>Inactive / Deactivated</span>
             <h3>{inactiveCount}</h3>
           </div>
-          <div className="team3-stat-icon inactive">⚠️</div>
+          <div className="team3-stat-icon inactive"><FaExclamationTriangle /></div>
         </div>
       </div>
 
@@ -153,7 +154,7 @@ export const Customers = () => {
         {/* Controls Bar (Search & Actions) */}
         <div className="team3-control-bar">
           <div className="team3-search-box">
-            <span className="team3-search-icon">🔍</span>
+            <span className="team3-search-icon"><FaSearch /></span>
             <input
               type="text"
               placeholder="Search by customer name, phone, email..."
@@ -270,7 +271,7 @@ export const Customers = () => {
                 <tr>
                   <td colSpan="7">
                     <div className="team3-empty-state">
-                      <div style={{ fontSize: '2rem' }}>🔍</div>
+                      <div style={{ fontSize: '2rem' }}><FaSearch /></div>
                       <p style={{ fontWeight: 600, color: '#374151' }}>No matching customers found</p>
                       <p>Try refining your search terms or status filter.</p>
                     </div>

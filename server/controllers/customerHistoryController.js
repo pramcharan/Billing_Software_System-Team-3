@@ -16,7 +16,7 @@ export const getCustomerHistory = async (req, res) => {
         }
 
         const purchases = await Purchase.find({ customerId: id })
-            .select("purchaseId purchaseDate totalAmount paymentStatus")
+            .select("purchaseId purchaseDate items subtotal discount tax totalAmount paymentStatus")
             .sort({ purchaseDate: -1 })
             .lean();
 

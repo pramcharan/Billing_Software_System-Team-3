@@ -3,7 +3,7 @@ import Customer from "../models/Customer.js";
 
 export const createCustomer = async (req, res) => {
     try {
-        const { name, phone, email, address, gstNumber } = req.body;
+        const { name, phone, email, address, gstNumber, status } = req.body;
 
         if (!name || !name.trim()) {
             return res.status(400).json({
@@ -17,7 +17,8 @@ export const createCustomer = async (req, res) => {
             phone,
             email,
             address,
-            gstNumber
+            gstNumber,
+            status: status || "Active"
         });
 
         return res.status(201).json({
@@ -99,7 +100,7 @@ export const updateCustomer = async (req, res) => {
             });
         }
 
-        const { name, phone, email, address, gstNumber } = req.body;
+        const { name, phone, email, address, gstNumber, status } = req.body;
 
         if (!name || !name.trim()) {
             return res.status(400).json({
@@ -122,6 +123,7 @@ export const updateCustomer = async (req, res) => {
         customer.email = email;
         customer.address = address;
         customer.gstNumber = gstNumber;
+        if (status) customer.status = status;
 
         const updatedCustomer = await customer.save();
 
@@ -172,6 +174,44 @@ export const deleteCustomer = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Failed to delete customer"
+        });
+    }
+};
+
+export const toggleCustomerStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid customer ID"
+            });
+        }
+
+        const customer = await Customer.findById(id);
+
+        if (!customer) {
+            return res.status(404).json({
+                success: false,
+                message: "Customer not found"
+            });
+        }
+
+        customer.status = customer.status === "Active" ? "Inactive" : "Active";
+        const updatedCustomer = await customer.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Customer status changed to ${updatedCustomer.status}`,
+            data: updatedCustomer
+        });
+    } catch (error) {
+        console.error("Toggle customer status error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update customer status"
         });
     }
 };

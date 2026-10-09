@@ -9,7 +9,8 @@ export const createSupplier = async (req, res) => {
             phone,
             email,
             address,
-            gstNumber
+            gstNumber,
+            status
         } = req.body;
 
         if (!companyName || !companyName.trim()) {
@@ -25,7 +26,8 @@ export const createSupplier = async (req, res) => {
             phone,
             email,
             address,
-            gstNumber
+            gstNumber,
+            status: status || "Active"
         });
 
         return res.status(201).json({
@@ -113,7 +115,8 @@ export const updateSupplier = async (req, res) => {
             phone,
             email,
             address,
-            gstNumber
+            gstNumber,
+            status
         } = req.body;
 
         if (!companyName || !companyName.trim()) {
@@ -138,6 +141,7 @@ export const updateSupplier = async (req, res) => {
         supplier.email = email;
         supplier.address = address;
         supplier.gstNumber = gstNumber;
+        if (status) supplier.status = status;
 
         const updatedSupplier = await supplier.save();
 
@@ -188,6 +192,44 @@ export const deleteSupplier = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Failed to delete supplier"
+        });
+    }
+};
+
+export const toggleSupplierStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid supplier ID"
+            });
+        }
+
+        const supplier = await Supplier.findById(id);
+
+        if (!supplier) {
+            return res.status(404).json({
+                success: false,
+                message: "Supplier not found"
+            });
+        }
+
+        supplier.status = supplier.status === "Active" ? "Inactive" : "Active";
+        const updatedSupplier = await supplier.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Supplier status changed to ${updatedSupplier.status}`,
+            data: updatedSupplier
+        });
+    } catch (error) {
+        console.error("Toggle supplier status error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update supplier status"
         });
     }
 };

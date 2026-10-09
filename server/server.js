@@ -16,9 +16,9 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/api/customers", customerRoutes);
+app.use("/api/customers", customerHistoryRoutes);  
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
-app.use("/api/customers", customerHistoryRoutes);  
 
 app.get("/api/health", (req, res) => {
     res.status(200).json({

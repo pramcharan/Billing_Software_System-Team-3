@@ -27,6 +27,12 @@ const customerSchema = new mongoose.Schema(
         gstNumber: {
             type: String,
             trim: true
+        },
+
+        status: {
+            type: String,
+            enum: ["Active", "Inactive"],
+            default: "Active"
         }
     },
     {

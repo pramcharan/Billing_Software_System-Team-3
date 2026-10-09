@@ -8,7 +8,7 @@ export const validatePurchase = (req, res, next) => {
     const errors = [];
 
     const { purchaseId, supplierId, customerId, purchaseDate, items,
-            subtotal, discount, tax, totalAmount, paymentStatus } = body;
+            subtotal, discount, tax, totalAmount, paymentStatus, notes } = body;
 
     // Required fields
     if (typeof purchaseId !== "string" || !purchaseId.trim())
@@ -74,6 +74,10 @@ export const validatePurchase = (req, res, next) => {
         errors.push("paymentStatus is required");
     else if (!PAYMENT_STATUSES.includes(paymentStatus.trim().toLowerCase()))
         errors.push(`paymentStatus must be one of: ${PAYMENT_STATUSES.join(", ")}`);
+
+    // Notes
+    if (notes !== undefined && notes !== null && typeof notes !== "string")
+        errors.push("notes must be a string");
 
     if (errors.length > 0) {
         return res.status(400).json({

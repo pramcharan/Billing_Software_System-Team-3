@@ -95,6 +95,11 @@ const purchaseSchema = new mongoose.Schema(
         stockUpdated: {
             type: Boolean,
             default: false
+        },
+
+        notes: {
+            type: String,
+            trim: true
         }
     },
     {

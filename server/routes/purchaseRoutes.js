@@ -1,5 +1,11 @@
 import express from "express";
-import { createPurchase, getPurchases, getPurchaseById } from "../controllers/purchaseController.js";
+import {
+    createPurchase,
+    getPurchases,
+    getPurchaseById,
+    updatePurchase,
+    deletePurchase
+} from "../controllers/purchaseController.js";
 import { validatePurchase } from "../middleware/validatePurchase.js";
 
 const router = express.Router();
@@ -7,5 +13,7 @@ const router = express.Router();
 router.post("/", validatePurchase, createPurchase);
 router.get("/", getPurchases);
 router.get("/:id", getPurchaseById);
+router.put("/:id", validatePurchase, updatePurchase);
+router.delete("/:id", deletePurchase);
 
 export default router;

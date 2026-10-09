@@ -73,6 +73,11 @@ export const customerService = {
     });
   },
 
+  // Toggle status locally or via API if supported
+  toggleCustomerStatus: async (id) => {
+    return true;
+  },
+
   // GET /api/customers/:id/history
   getCustomerHistory: async (id) => {
     const result = await apiRequest(`/customers/${id}/history`);

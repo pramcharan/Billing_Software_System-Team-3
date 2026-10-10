@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { FaTimes } from 'react-icons/fa';
 
 export const Modal = ({ isOpen, onClose, title, children, footer }) => {
   useEffect(() => {
@@ -19,7 +20,7 @@ export const Modal = ({ isOpen, onClose, title, children, footer }) => {
         <div className="team3-modal-header">
           <h2>{title}</h2>
           <button className="team3-modal-close" onClick={onClose} aria-label="Close Modal">
-            ✕
+            <FaTimes />
           </button>
         </div>
         <div className="team3-modal-body">

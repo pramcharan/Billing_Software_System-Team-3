@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaSearch, FaTruck, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaSearch, FaTruck, FaCheckCircle, FaExclamationTriangle, FaEye, FaEdit, FaBan, FaCheck, FaTrash } from 'react-icons/fa';
 import supplierService from '../../services/supplierService';
 import SupplierForm from './SupplierForm';
 import SupplierDetails from './SupplierDetails';
@@ -46,10 +46,10 @@ const Suppliers = () => {
     const matchesSearch =
       !q ||
       (s.supplierId || s.id || '').toLowerCase().includes(q) ||
-      s.companyName.toLowerCase().includes(q) ||
-      s.contactPerson.toLowerCase().includes(q) ||
-      s.phone.toLowerCase().includes(q) ||
-      s.email.toLowerCase().includes(q);
+      (s.companyName || '').toLowerCase().includes(q) ||
+      (s.contactPerson || '').toLowerCase().includes(q) ||
+      (s.phone || '').toLowerCase().includes(q) ||
+      (s.email || '').toLowerCase().includes(q);
 
     const matchesStatus = statusFilter === 'All' || s.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -80,16 +80,16 @@ const Suppliers = () => {
     await supplierService.toggleSupplierStatus(supplier.id);
     await loadSuppliers();
     const newStatus = supplier.status === 'Active' ? 'Inactive' : 'Active';
-    showToast(`✅ Supplier status changed to ${newStatus}`);
+    showToast(`Supplier status changed to ${newStatus}`);
   };
 
   const handleSaveSupplier = async (formData) => {
     if (selectedSupplier) {
       await supplierService.updateSupplier(selectedSupplier.id, formData);
-      showToast(`✅ Supplier "${formData.companyName}" updated successfully!`);
+      showToast(`Supplier "${formData.companyName}" updated successfully!`);
     } else {
       await supplierService.createSupplier(formData);
-      showToast(`✅ Supplier "${formData.companyName}" added successfully!`);
+      showToast(`Supplier "${formData.companyName}" added successfully!`);
     }
     setIsFormOpen(false);
     await loadSuppliers();
@@ -98,7 +98,7 @@ const Suppliers = () => {
   const handleConfirmDelete = async () => {
     if (supplierToDelete) {
       await supplierService.deleteSupplier(supplierToDelete.id);
-      showToast(`🗑️ Supplier "${supplierToDelete.companyName}" deleted.`);
+      showToast(`Supplier "${supplierToDelete.companyName}" deleted.`);
     }
     setIsDeleteOpen(false);
     setSupplierToDelete(null);
@@ -110,7 +110,7 @@ const Suppliers = () => {
       {/* Toast */}
       {toastMessage && (
         <div className="team3-toast">
-          <span>{toastMessage}</span>
+          <span><FaCheckCircle style={{marginRight: '6px'}} /> {toastMessage}</span>
         </div>
       )}
 
@@ -243,28 +243,28 @@ const Suppliers = () => {
                           title="View Supplier Details"
                           onClick={() => handleOpenDetails(supplier)}
                         >
-                          👁️
+                          <FaEye />
                         </button>
                         <button
                           className="team3-action-btn edit"
                           title="Edit Supplier"
                           onClick={() => handleOpenEdit(supplier)}
                         >
-                          ✏️
+                          <FaEdit />
                         </button>
                         <button
                           className="team3-action-btn toggle"
                           title={supplier.status === 'Active' ? 'Deactivate Supplier' : 'Activate Supplier'}
                           onClick={() => handleToggleStatus(supplier)}
                         >
-                          {supplier.status === 'Active' ? '🚫' : '✔️'}
+                          {supplier.status === 'Active' ? <FaBan /> : <FaCheck />}
                         </button>
                         <button
                           className="team3-action-btn delete"
                           title="Delete Supplier"
                           onClick={() => handleOpenDelete(supplier)}
                         >
-                          🗑️
+                          <FaTrash />
                         </button>
                       </div>
                     </td>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FaSearch } from 'react-icons/fa';
+import { FaSearch, FaEdit, FaShoppingCart } from 'react-icons/fa';
 import purchaseService from '../../services/purchaseService';
 
 const fmt = (v) =>
@@ -83,7 +83,7 @@ const PurchaseDetails = () => {
             className="team3-btn team3-btn-primary"
             onClick={() => navigate(`/purchases/${purchase.id}/edit`)}
           >
-            ✏️ Edit
+            <FaEdit style={{marginRight: '6px'}} /> Edit
           </button>
         </div>
       </div>
@@ -93,7 +93,7 @@ const PurchaseDetails = () => {
         {/* Invoice Header */}
         <div className="purch-invoice-header">
           <div className="purch-invoice-brand">
-            <div className="purch-invoice-brand-icon">🛒</div>
+            <div className="purch-invoice-brand-icon"><FaShoppingCart /></div>
             <div>
               <h2>Purchase Order</h2>
               <p>Billing Software — Purchase Management</p>

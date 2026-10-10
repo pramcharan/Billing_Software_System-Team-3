@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FaShoppingCart } from 'react-icons/fa';
 import Modal from '../../components/common/Modal';
 import customerService from '../../services/customerService';
 
@@ -111,7 +112,7 @@ export const CustomerDetails = ({ isOpen, onClose, customer }) => {
       <div className="team3-history-section" style={{ marginTop: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            🛍️ Customer Purchase History
+            <FaShoppingCart /> Customer Purchase History
             <span style={{ fontSize: '0.8rem', background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '12px' }}>
               {historyCount} record{historyCount === 1 ? '' : 's'}
             </span>

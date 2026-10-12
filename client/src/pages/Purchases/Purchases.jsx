@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaSearch, FaShoppingCart, FaCheckCircle, FaClock, FaDollarSign } from 'react-icons/fa';
+import { FaSearch, FaShoppingCart, FaCheckCircle, FaClock, FaDollarSign, FaTimes, FaEye, FaEdit, FaTrash } from 'react-icons/fa';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 import purchaseService from '../../services/purchaseService';
 import supplierService from '../../services/supplierService';
@@ -50,6 +51,9 @@ const Purchases = () => {
 
   const [error, setError] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [purchaseToDelete, setPurchaseToDelete] = useState(null);
 
   // -------------------------------------------------------------------------
   // Load purchases from backend
@@ -259,6 +263,28 @@ const Purchases = () => {
   };
 
   // -------------------------------------------------------------------------
+  // Delete
+  // -------------------------------------------------------------------------
+  const handleOpenDelete = (purchase) => {
+    setPurchaseToDelete(purchase);
+    setIsDeleteOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (purchaseToDelete) {
+      try {
+        await purchaseService.deletePurchase(purchaseToDelete.id);
+        showToast('Purchase deleted successfully');
+        await loadPurchases();
+      } catch (err) {
+        setError(err.message || 'Failed to delete purchase');
+      }
+    }
+    setIsDeleteOpen(false);
+    setPurchaseToDelete(null);
+  };
+
+  // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
   return (
@@ -270,7 +296,7 @@ const Purchases = () => {
       {toastMessage && (
         <div className="team3-toast">
           <span>
-            ✅ {toastMessage}
+            <FaCheckCircle style={{marginRight: '6px'}} /> {toastMessage}
           </span>
         </div>
       )}
@@ -439,7 +465,7 @@ const Purchases = () => {
                     handleClearFilters
                   }
                 >
-                  ✕ Clear Filters
+                  <FaTimes style={{marginRight: '6px'}} /> Clear Filters
                 </button>
               )}
 
@@ -613,7 +639,7 @@ const Purchases = () => {
                 marginBottom: '10px',
               }}
             >
-              ⏳
+              <FaClock />
             </div>
 
             <p>
@@ -811,35 +837,29 @@ const Purchases = () => {
                                 )
                               }
                             >
-                              👁️
+                              <FaEye />
                             </button>
 
                             <button
                               type="button"
                               className="team3-action-btn edit"
-                              title="Edit Purchase is not available"
-                              disabled
-                              style={{
-                                opacity: 0.4,
-                                cursor:
-                                  'not-allowed',
-                              }}
+                              title="Edit Purchase"
+                              onClick={() =>
+                                navigate(
+                                  `/purchases/${purchase.id}/edit`
+                                )
+                              }
                             >
-                              ✏️
+                              <FaEdit />
                             </button>
 
                             <button
                               type="button"
                               className="team3-action-btn delete"
-                              title="Delete Purchase is not available"
-                              disabled
-                              style={{
-                                opacity: 0.4,
-                                cursor:
-                                  'not-allowed',
-                              }}
+                              title="Delete Purchase"
+                              onClick={() => handleOpenDelete(purchase)}
                             >
-                              🗑️
+                              <FaTrash />
                             </button>
                           </div>
                         </td>
@@ -919,6 +939,15 @@ const Purchases = () => {
         )}
 
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Purchase"
+        message={`Are you sure you want to delete purchase "${purchaseToDelete ? (purchaseToDelete.purchaseId || purchaseToDelete.id) : ''}"?`}
+      />
     </div>
   );
 };

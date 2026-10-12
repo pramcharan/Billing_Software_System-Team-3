@@ -1,15 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaSearch } from 'react-icons/fa';
+import { FaSearch, FaEye, FaClipboardList } from 'react-icons/fa';
 import purchaseService from '../../services/purchaseService';
 
-// ---------------------------------------------------------------------------
-// Temporary supplier options — isolated for easy API replacement later
-// TODO: Replace with GET /api/suppliers when backend is ready
-// ---------------------------------------------------------------------------
-const TEMP_SUPPLIERS = [
-  // { id: 'SUP-001', companyName: 'Sample Supplier' }
-];
+import supplierService from '../../services/supplierService';
 
 const fmt = (v) =>
   `₹ ${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -34,8 +28,11 @@ const PurchaseHistory = () => {
 
   // ── Load purchases from in-memory service at mount ─────────────────────
   const [historyPurchases, setHistoryPurchases] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  
   React.useEffect(() => {
     purchaseService.getPurchases().then(setHistoryPurchases);
+    supplierService.getSuppliers().then(setSuppliers).catch(() => setSuppliers([]));
   }, []);
 
   // ── Filtering ─────────────────────────────────────────────────────────────
@@ -118,7 +115,6 @@ const PurchaseHistory = () => {
           </div>
 
           {/* Supplier */}
-          {/* TODO: Replace with dynamic supplier list from GET /api/suppliers */}
           <div className="purch-filter-group">
             <label htmlFor="hist-supplier">Supplier</label>
             <select
@@ -128,8 +124,8 @@ const PurchaseHistory = () => {
               className="team3-filter-select"
             >
               <option value="">All Suppliers</option>
-              {TEMP_SUPPLIERS.map((s) => (
-                <option key={s.id} value={s.id}>{s.companyName}</option>
+              {suppliers.map((s) => (
+                <option key={s.id || s._id} value={s.id || s._id}>{s.companyName}</option>
               ))}
             </select>
           </div>
@@ -176,7 +172,7 @@ const PurchaseHistory = () => {
           {/* Clear Filters */}
           {hasFilters && (
             <button className="team3-btn team3-btn-secondary" onClick={handleClearFilters}>
-              ✕ Clear
+              Clear
             </button>
           )}
         </div>
@@ -230,7 +226,7 @@ const PurchaseHistory = () => {
                           title="View Purchase Details"
                           onClick={() => navigate(`/purchases/${p.id}`)}
                         >
-                          👁️ View Details
+                          <FaEye /> View Details
                         </button>
                       </div>
                     </td>
@@ -241,7 +237,7 @@ const PurchaseHistory = () => {
                   <td colSpan="7">
                     <div className="team3-empty-state">
                       <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>
-                        {hasFilters ? <FaSearch /> : '📋'}
+                        {hasFilters ? <FaSearch /> : <FaClipboardList />}
                       </div>
                       <p style={{ fontWeight: 600, color: '#374151', margin: '0 0 0.25rem' }}>
                         {hasFilters

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { Menu, Search, User } from 'lucide-react';
+import { Menu, User } from 'lucide-react';
 
 const ROUTE_META = {
   '/':           { title: 'Dashboard' },
@@ -40,9 +40,6 @@ const Header = ({ onMenuToggle }) => {
 
       {/* Right — search icon + admin badge */}
       <div className="top-header__right">
-        <button className="top-header__icon-btn" aria-label="Search">
-          <Search size={18} />
-        </button>
         <div className="top-header__admin" aria-label="Logged in as Admin">
           <div className="top-header__avatar">
             <User size={15} />

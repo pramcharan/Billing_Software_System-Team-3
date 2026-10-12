@@ -4,18 +4,7 @@ import purchaseService, {
   generatePurchaseId,
 } from '../../services/purchaseService';
 import supplierService from '../../services/supplierService';
-
-// ---------------------------------------------------------
-// TEMPORARY PRODUCTS
-// ---------------------------------------------------------
-// IMPORTANT:
-// Team 2's Product API is not connected yet.
-// The backend requires a real productId (MongoDB ObjectId).
-//
-// For now, products are kept empty.
-// Once Team 2 gives us the Product API, we will connect it here.
-// ---------------------------------------------------------
-const TEMP_PRODUCTS = [];
+import { apiRequest } from '../../services/api';
 
 // ---------------------------------------------------------
 // PAYMENT STATUS
@@ -67,10 +56,13 @@ const PurchaseForm = () => {
   const [notes, setNotes] = useState('');
 
   // -------------------------------------------------------
-  // SUPPLIER STATE
+  // SUPPLIER & PRODUCT STATE
   // -------------------------------------------------------
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
   // -------------------------------------------------------
   // GENERAL STATE
@@ -100,6 +92,22 @@ const PurchaseForm = () => {
       );
     } finally {
       setLoadingSuppliers(false);
+    }
+  }, []);
+
+  // -------------------------------------------------------
+  // LOAD PRODUCTS
+  // -------------------------------------------------------
+  const loadProducts = useCallback(async () => {
+    try {
+      setLoadingProducts(true);
+      const result = await apiRequest('/products');
+      setProducts(result.data || []);
+    } catch (err) {
+      console.error('Failed to load products:', err);
+      // Optional: set a non-blocking error or let the user know
+    } finally {
+      setLoadingProducts(false);
     }
   }, []);
 
@@ -175,7 +183,8 @@ const PurchaseForm = () => {
   // -------------------------------------------------------
   useEffect(() => {
     loadSuppliers();
-  }, [loadSuppliers]);
+    loadProducts();
+  }, [loadSuppliers, loadProducts]);
 
   useEffect(() => {
     if (isEditMode) {
@@ -255,10 +264,7 @@ const PurchaseForm = () => {
     0
   );
 
-  const finalTax =
-    Number(taxAmount || 0) > 0
-      ? Number(taxAmount)
-      : calculatedItemTax;
+  const finalTax = calculatedItemTax;
 
   const discount =
     Number(discountAmount || 0);
@@ -323,9 +329,9 @@ const PurchaseForm = () => {
     productId
   ) => {
     const selectedProduct =
-      TEMP_PRODUCTS.find(
+      products.find(
         (product) =>
-          product.id === productId
+          product._id === productId || product.id === productId
       );
 
     setItems((currentItems) =>
@@ -335,9 +341,11 @@ const PurchaseForm = () => {
               ...item,
               productId,
               productName:
-                selectedProduct?.name || '',
+                selectedProduct?.productName || selectedProduct?.name || '',
               purchasePrice:
                 selectedProduct?.purchasePrice || 0,
+              tax:
+                selectedProduct?.taxRate || 0,
             }
           : item
       )
@@ -425,16 +433,6 @@ const PurchaseForm = () => {
     setError('');
     setSuccessMessage('');
 
-    // -----------------------------------------------------
-    // PURCHASE EDIT IS NOT SUPPORTED BY CURRENT BACKEND
-    // -----------------------------------------------------
-    if (isEditMode) {
-      setError(
-        'Purchase editing is currently not supported by the Team 3 backend. Please create a new purchase instead.'
-      );
-      return;
-    }
-
     const validationError = validateForm();
 
     if (validationError) {
@@ -497,19 +495,21 @@ const PurchaseForm = () => {
       // ---------------------------------------------------
       // SEND TO BACKEND
       // ---------------------------------------------------
-      const createdPurchase =
-        await purchaseService.createPurchase(
+      let savedPurchase;
+      if (isEditMode) {
+        savedPurchase = await purchaseService.updatePurchase(
+          id,
           payload
         );
-
-      console.log(
-        'Purchase created successfully:',
-        createdPurchase
-      );
-
-      setSuccessMessage(
-        'Purchase created successfully.'
-      );
+        console.log('Purchase updated successfully:', savedPurchase);
+        setSuccessMessage('Purchase updated successfully.');
+      } else {
+        savedPurchase = await purchaseService.createPurchase(
+          payload
+        );
+        console.log('Purchase created successfully:', savedPurchase);
+        setSuccessMessage('Purchase created successfully.');
+      }
 
       // ---------------------------------------------------
       // GO TO PURCHASE LIST
@@ -665,26 +665,6 @@ const PurchaseForm = () => {
           }}
         >
           {successMessage}
-        </div>
-      )}
-
-      {/* ------------------------------------------------- */}
-      {/* EDIT MODE WARNING */}
-      {/* ------------------------------------------------- */}
-      {isEditMode && (
-        <div
-          style={{
-            background: '#fff8e1',
-            border: '1px solid #f0d98c',
-            color: '#725900',
-            padding: '12px 16px',
-            borderRadius: '6px',
-            marginBottom: '16px',
-          }}
-        >
-          Purchase editing is not available because the
-          current backend does not provide a PUT purchase
-          endpoint.
         </div>
       )}
 
@@ -908,7 +888,7 @@ const PurchaseForm = () => {
           </div>
 
           {/* TEAM 2 PRODUCT NOTICE */}
-          {TEMP_PRODUCTS.length === 0 && (
+          {products.length === 0 && !loadingProducts && (
             <div
               style={{
                 background: '#fff8e1',
@@ -921,12 +901,9 @@ const PurchaseForm = () => {
               }}
             >
               <strong>
-                Team 2 Product API required:
+                No products found:
               </strong>{' '}
-              The purchase backend requires a
-              real Product ID. The product dropdown
-              will be connected to Team 2 inventory
-              once their Product API is available.
+              Could not load products from Team 2 inventory. Ensure their API is running.
             </div>
           )}
 
@@ -998,7 +975,7 @@ const PurchaseForm = () => {
                     Product *
                   </label>
 
-                  {TEMP_PRODUCTS.length > 0 ? (
+                  {products.length > 0 ? (
                     <select
                       value={
                         item.productId
@@ -1030,18 +1007,18 @@ const PurchaseForm = () => {
                         Select Product
                       </option>
 
-                      {TEMP_PRODUCTS.map(
+                      {products.map(
                         (product) => (
                           <option
                             key={
-                              product.id
+                              product._id || product.id
                             }
                             value={
-                              product.id
+                              product._id || product.id
                             }
                           >
                             {
-                              product.name
+                              product.productName || product.name || product.sku
                             }
                           </option>
                         )
@@ -1054,7 +1031,7 @@ const PurchaseForm = () => {
                         item.productName
                       }
                       disabled
-                      placeholder="Waiting for Team 2 Product API"
+                      placeholder={loadingProducts ? "Loading products..." : "No products available"}
                       style={{
                         width:
                           '100%',
@@ -1267,7 +1244,7 @@ const PurchaseForm = () => {
                   fontWeight: 600,
                 }}
               >
-                Discount
+                Discount (₹)
               </label>
 
               <input
@@ -1315,18 +1292,8 @@ const PurchaseForm = () => {
                 type="number"
                 min="0"
                 step="0.01"
-                value={
-                  taxAmount
-                }
-                onChange={(
-                  event
-                ) =>
-                  setTaxAmount(
-                    event.target
-                      .value
-                  )
-                }
-                placeholder="Leave 0 to calculate from items"
+                value={finalTax.toFixed(2)}
+                disabled
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -1336,6 +1303,7 @@ const PurchaseForm = () => {
                     '6px',
                   boxSizing:
                     'border-box',
+                  background: '#f5f5f5',
                 }}
               />
             </div>
@@ -1434,17 +1402,7 @@ const PurchaseForm = () => {
               }}
             />
 
-            <small
-              style={{
-                color: '#777',
-              }}
-            >
-              Note: Notes are currently
-              displayed in the form but are not
-              stored because the current backend
-              Purchase model does not have a notes
-              field.
-            </small>
+
           </div>
         </div>
 
@@ -1579,16 +1537,14 @@ const PurchaseForm = () => {
             type="submit"
             disabled={
               loading ||
-              loadingSuppliers ||
-              isEditMode
+              loadingSuppliers
             }
             style={{
               padding: '11px 22px',
               border: 'none',
               background:
                 loading ||
-                loadingSuppliers ||
-                isEditMode
+                loadingSuppliers
                   ? '#999'
                   : '#2563eb',
               color: '#fff',
@@ -1596,8 +1552,7 @@ const PurchaseForm = () => {
                 '6px',
               cursor:
                 loading ||
-                loadingSuppliers ||
-                isEditMode
+                loadingSuppliers
                   ? 'not-allowed'
                   : 'pointer',
               fontWeight: 600,

@@ -1,5 +1,6 @@
 import React from 'react';
 import Modal from './Modal';
+import { FaExclamationTriangle } from 'react-icons/fa';
 
 export const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => {
   return (
@@ -19,7 +20,7 @@ export const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => 
       }
     >
       <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem', color: '#ef4444' }}>⚠️</div>
+        <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem', color: '#ef4444' }}><FaExclamationTriangle /></div>
         <p style={{ margin: '0 0 0.5rem 0', fontWeight: 600, fontSize: '1rem', color: '#111827' }}>
           {message}
         </p>

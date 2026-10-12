@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaSearch, FaUsers, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaSearch, FaUsers, FaCheckCircle, FaExclamationTriangle, FaEye, FaEdit, FaBan, FaCheck, FaTrash } from 'react-icons/fa';
 import customerService from '../../services/customerService';
 import CustomerForm from './CustomerForm';
 import CustomerDetails from './CustomerDetails';
@@ -46,8 +46,8 @@ export const Customers = () => {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
       c.name.toLowerCase().includes(q) ||
-      c.phone.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
       (c.gstNumber && c.gstNumber.toLowerCase().includes(q));
 
     const matchesStatus =
@@ -110,7 +110,7 @@ export const Customers = () => {
       {/* Toast Notification */}
       {toastMessage && (
         <div className="team3-toast">
-          <span>✅ {toastMessage}</span>
+          <span><FaCheckCircle style={{marginRight: '6px'}} /> {toastMessage}</span>
         </div>
       )}
 
@@ -240,28 +240,28 @@ export const Customers = () => {
                           title="View Details & Purchase History"
                           onClick={() => handleOpenDetails(customer)}
                         >
-                          👁️
+                          <FaEye />
                         </button>
                         <button
                           className="team3-action-btn edit"
                           title="Edit Customer"
                           onClick={() => handleOpenEdit(customer)}
                         >
-                          ✏️
+                          <FaEdit />
                         </button>
                         <button
                           className="team3-action-btn toggle"
                           title={customer.status === 'Active' ? 'Deactivate Customer' : 'Activate Customer'}
                           onClick={() => handleToggleStatus(customer)}
                         >
-                          {customer.status === 'Active' ? '🚫' : '✔️'}
+                          {customer.status === 'Active' ? <FaBan /> : <FaCheck />}
                         </button>
                         <button
                           className="team3-action-btn delete"
                           title="Delete Customer"
                           onClick={() => handleOpenDelete(customer)}
                         >
-                          🗑️
+                          <FaTrash />
                         </button>
                       </div>
                     </td>

@@ -187,6 +187,47 @@ export const purchaseService = {
       result.data
     );
   },
+
+  // PUT /api/purchases/:id
+  updatePurchase: async (id, purchaseData) => {
+    const payload = {
+      purchaseId: purchaseData.purchaseId,
+      supplierId: purchaseData.supplierId,
+
+      ...(purchaseData.customerId
+        ? { customerId: purchaseData.customerId }
+        : {}),
+
+      purchaseDate: purchaseData.purchaseDate,
+
+      items: (purchaseData.items || []).map((item) => ({
+        productId: item.productId,
+        quantity: Number(item.quantity),
+        purchasePrice: Number(item.purchasePrice),
+        tax: Number(item.tax || 0),
+      })),
+
+      subtotal: Number(purchaseData.subtotal || 0),
+      discount: Number(purchaseData.discount || 0),
+      tax: Number(purchaseData.tax || 0),
+      totalAmount: Number(purchaseData.totalAmount || 0),
+      paymentStatus: purchaseData.paymentStatus?.toLowerCase(),
+    };
+
+    const result = await apiRequest(`/purchases/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+
+    return normalizePurchase(result.data);
+  },
+
+  // DELETE /api/purchases/:id
+  deletePurchase: async (id) => {
+    return apiRequest(`/purchases/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 export default purchaseService;

@@ -6,8 +6,7 @@ const normalizeCustomer = (customer) => ({
   // Existing React screens use customer.id.
   id: customer._id,
 
-  // Backend currently has no status field.
-  // Until backend supports deactivation, existing records are treated as Active.
+  // Backend now supports status field.
   status: customer.status || 'Active',
 
   createdAt: customer.createdAt
@@ -19,14 +18,12 @@ export const customerService = {
   // GET /api/customers
   getCustomers: async () => {
     const result = await apiRequest('/customers');
-
     return (result.data || []).map(normalizeCustomer);
   },
 
   // GET /api/customers/:id
   getCustomerById: async (id) => {
     const result = await apiRequest(`/customers/${id}`);
-
     return normalizeCustomer(result.data);
   },
 
@@ -38,6 +35,7 @@ export const customerService = {
       email: customerData.email?.trim() || '',
       address: customerData.address?.trim() || '',
       gstNumber: customerData.gstNumber?.trim().toUpperCase() || '',
+      status: customerData.status || 'Active',
     };
 
     const result = await apiRequest('/customers', {
@@ -56,6 +54,7 @@ export const customerService = {
       email: customerData.email?.trim() || '',
       address: customerData.address?.trim() || '',
       gstNumber: customerData.gstNumber?.trim().toUpperCase() || '',
+      status: customerData.status || 'Active',
     };
 
     const result = await apiRequest(`/customers/${id}`, {
@@ -73,9 +72,12 @@ export const customerService = {
     });
   },
 
-  // Toggle status locally or via API if supported
+  // PATCH /api/customers/:id/status — toggle Active <-> Inactive
   toggleCustomerStatus: async (id) => {
-    return true;
+    const result = await apiRequest(`/customers/${id}/status`, {
+      method: 'PATCH',
+    });
+    return normalizeCustomer(result.data);
   },
 
   // GET /api/customers/:id/history

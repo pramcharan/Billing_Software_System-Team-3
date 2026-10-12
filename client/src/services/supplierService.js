@@ -14,14 +14,12 @@ export const supplierService = {
   // GET /api/suppliers
   getSuppliers: async () => {
     const result = await apiRequest('/suppliers');
-
     return (result.data || []).map(normalizeSupplier);
   },
 
   // GET /api/suppliers/:id
   getSupplierById: async (id) => {
     const result = await apiRequest(`/suppliers/${id}`);
-
     return normalizeSupplier(result.data);
   },
 
@@ -34,6 +32,7 @@ export const supplierService = {
       email: supplierData.email?.trim() || '',
       address: supplierData.address?.trim() || '',
       gstNumber: supplierData.gstNumber?.trim().toUpperCase() || '',
+      status: supplierData.status || 'Active',
     };
 
     const result = await apiRequest('/suppliers', {
@@ -53,6 +52,7 @@ export const supplierService = {
       email: supplierData.email?.trim() || '',
       address: supplierData.address?.trim() || '',
       gstNumber: supplierData.gstNumber?.trim().toUpperCase() || '',
+      status: supplierData.status || 'Active',
     };
 
     const result = await apiRequest(`/suppliers/${id}`, {
@@ -68,6 +68,14 @@ export const supplierService = {
     return apiRequest(`/suppliers/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  // PATCH /api/suppliers/:id/status — toggle Active <-> Inactive
+  toggleSupplierStatus: async (id) => {
+    const result = await apiRequest(`/suppliers/${id}/status`, {
+      method: 'PATCH',
+    });
+    return normalizeSupplier(result.data);
   },
 };
 
